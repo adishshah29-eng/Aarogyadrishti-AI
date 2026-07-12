@@ -532,6 +532,23 @@ hr {
   padding: 14px !important;
   box-shadow: var(--shadow-xs) !important;
 }
+/* ── Mobile Responsiveness ── */
+@media (max-width: 768px) {
+  .top-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .cri-wrap {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 20px;
+  }
+  .hiw-grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>
 """, unsafe_allow_html=True)
 
