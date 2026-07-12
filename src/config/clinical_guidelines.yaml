@@ -1,0 +1,78 @@
+features:
+  bmi:
+    name: "BMI"
+    unit: ""
+    positive_advice: "Maintaining a healthier weight (target: 18.5 - 24.9) through diet and exercise is one of the most effective ways to lower your overall risk."
+    negative_advice: "Your BMI is in a healthy range, which actively protects your metabolic health."
+  
+  systolic_bp:
+    name: "Systolic Blood Pressure"
+    unit: " mmHg"
+    positive_advice: "Working with a doctor to lower your blood pressure to a normal range (target: <120 mmHg) can significantly protect your heart and kidneys."
+    negative_advice: "Your systolic blood pressure is well-controlled, significantly protecting your cardiovascular system."
+
+  diastolic_bp:
+    name: "Diastolic Blood Pressure"
+    unit: " mmHg"
+    positive_advice: "Managing your blood pressure (target: <80 mmHg) is critical for long-term cardiovascular health."
+    negative_advice: "Your diastolic blood pressure is in a safe range."
+
+  glucose:
+    name: "Fasting Glucose"
+    unit: " mg/dL"
+    positive_advice: "Keeping blood sugar levels in a healthy range (target: 70 - 100 mg/dL) helps prevent systemic damage to your organs."
+    negative_advice: "Your fasting glucose is excellent, drastically lowering your risk for insulin resistance."
+
+  cholesterol:
+    name: "Total Cholesterol"
+    unit: " mg/dL"
+    positive_advice: "Lowering cholesterol (target: <200 mg/dL) through diet or medication can prevent plaque buildup in your arteries."
+    negative_advice: "Your cholesterol levels are healthy, minimizing arterial plaque risk."
+
+  smoking:
+    name: "Smoking Habit"
+    unit: ""
+    positive_advice: "Quitting smoking (target: Never) is the single best action you can take to immediately reduce your health risks."
+    negative_advice: "By not smoking, you are giving your heart and lungs the best possible protection."
+
+  alcohol:
+    name: "Alcohol Intake"
+    unit: ""
+    positive_advice: "Reducing alcohol consumption (target: None or Occasional) can improve liver function and lower blood pressure."
+    negative_advice: "Your low alcohol consumption helps protect your liver and blood pressure."
+
+  physical_activity:
+    name: "Physical Activity Level"
+    unit: ""
+    positive_advice: "Increasing your daily physical activity (target: Moderate or High) strengthens your cardiovascular system."
+    negative_advice: "Your active lifestyle acts as a strong protective shield for your cardiovascular health."
+
+  age:
+    name: "Age"
+    unit: " years"
+    positive_advice: "Age naturally increases the baseline risk over time, making preventative care more important."
+    negative_advice: "Your younger age provides a natural buffer against age-related decline."
+
+  sex:
+    name: "Biological Sex"
+    unit: ""
+    positive_advice: "Biological factors can influence the baseline risk for this condition."
+    negative_advice: "Biological factors can naturally lower the baseline risk for this condition."
+
+  family_history:
+    name: "Family History"
+    unit: ""
+    positive_advice: "Genetics play a strong role here, meaning regular screening is highly recommended."
+    negative_advice: "A lack of family history for this condition works in your favor."
+
+  diabetes_risk:
+    name: "Diabetes Risk Score"
+    unit: "%"
+    positive_advice: "Your risk level for diabetes acts as an accelerator for cardiovascular and kidney conditions (target: <30%)."
+    negative_advice: "Your low diabetes risk helps keep your entire metabolic system stable."
+
+  hypertension_risk:
+    name: "Hypertension Risk Score"
+    unit: "%"
+    positive_advice: "High blood pressure risk heavily influences heart and kidney health (target: <30%)."
+    negative_advice: "Your low hypertension risk protects your vascular system from strain."

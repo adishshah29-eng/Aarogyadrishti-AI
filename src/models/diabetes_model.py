@@ -144,7 +144,8 @@ def train_and_evaluate():
 # --- HANDOFF PREDICTION INTERFACE ---
 
 def _load_model_data():
-    model_path = r"c:\Users\Sayli\OneDrive\Desktop\Aarogyadrishti-AI\models\diabetes_model.pkl"
+    model_path = os.path.join(os.path.dirname(__file__), "..", "..", "models", "diabetes_model.pkl")
+    model_path = os.path.abspath(model_path)
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Trained diabetes model file not found at {model_path}. Run training first.")
     return joblib.load(model_path)

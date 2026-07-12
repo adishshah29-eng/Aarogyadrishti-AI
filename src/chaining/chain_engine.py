@@ -80,8 +80,10 @@ def clean_brfss_data(raw_path):
     return df_clean
 
 def run_chaining_evaluation():
-    raw_dir = r"c:\Users\Sayli\OneDrive\Desktop\Aarogyadrishti-AI\data\raw"
-    processed_dir = r"c:\Users\Sayli\OneDrive\Desktop\Aarogyadrishti-AI\data\processed"
+    raw_dir = os.path.join(os.path.dirname(__file__), "..", "..", "data", "raw")
+    processed_dir = os.path.join(os.path.dirname(__file__), "..", "..", "data", "processed")
+    raw_dir = os.path.abspath(raw_dir)
+    processed_dir = os.path.abspath(processed_dir)
     
     print("Loading and cleaning comorbidity datasets...")
     df_hh = clean_heart_hypertension_data(os.path.join(raw_dir, "heart + hypertension.csv"))
@@ -174,7 +176,8 @@ def run_chaining_evaluation():
         })
         
     # Write report
-    report_path = r"c:\Users\Sayli\OneDrive\Desktop\Aarogyadrishti-AI\reports\chaining_results.md"
+    report_path = os.path.join(os.path.dirname(__file__), "..", "..", "reports", "chaining_results.md")
+    report_path = os.path.abspath(report_path)
     with open(report_path, 'w') as f:
         f.write("# Chained Risk Prediction Results (Isolated vs. Chained Performance Comparison)\n\n")
         f.write("This report documents the performance improvement in Heart Disease and Hypertension prediction when incorporating upstream risk probabilities (Diabetes and CKD risks) as features.\n\n")

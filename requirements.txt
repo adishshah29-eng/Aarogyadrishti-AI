@@ -4,3 +4,6 @@ scikit-learn
 xgboost
 imbalanced-learn
 joblib
+streamlit
+shap
+plotly
