@@ -13,8 +13,7 @@ if PROJECT_ROOT not in sys.path:
 
 from src.chaining.cri import get_full_risk_profile
 from src.explainability.shap_engine import explain_prediction
-import shap
-import matplotlib.pyplot as plt
+
 from src.models.diabetes_model import _load_model_data as load_diabetes
 from src.models.ckd_model import _load_model_data as load_ckd
 from src.models.heart_model import _load_model_data as load_heart
