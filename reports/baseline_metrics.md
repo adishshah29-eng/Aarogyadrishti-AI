@@ -61,12 +61,13 @@ The Hypertension (cardiovascular) dataset contains 70,000 patient records (35,02
 
 | Model Version | Accuracy | ROC AUC | F1-Score | Confusion Matrix (TN, FP, FN, TP) |
 |---|---|---|---|---|
-| **Baseline (Full-feature)** | 73.62% | 0.8029 | 0.7246 | TN: 27242, FP: 7779, FN: 10686, TP: 24293 |
-| **Isolated (Checkup-safe)** | 73.56% | 0.8024 | 0.7243 | TN: 27178, FP: 7843, FN: 10667, TP: 24312 |
-| **Chained (Checkup-safe, SHIPS)** | **73.69%** | 0.8025 | **0.7251** | TN: 27289, FP: 7732, FN: 10683, TP: 24296 |
+| **Baseline (Full-feature)** | 73.60% | 0.8029 | 0.7247 | TN: 27206, FP: 7815, FN: 10662, TP: 24317 |
+| **Isolated (Checkup-safe)** | 73.61% | 0.8024 | 0.7250 | TN: 27179, FP: 7842, FN: 10631, TP: 24348 |
+| **Chained (Checkup-safe, SHIPS)** | **73.71%** | 0.8028 | **0.7254** | TN: 27276, FP: 7745, FN: 10661, TP: 24318 |
 
 ### Chaining Effect
-* **Chained − Isolated: +0.14% accuracy, ~0.0001 ROC AUC.** For Hypertension the chaining effect is essentially neutral: the dataset already carries rich vitals (BMI, systolic/diastolic BP, glucose), so the upstream risk features are largely redundant.
+* **Chained − Isolated: +0.10% accuracy, ~0.0004 ROC AUC.** For Hypertension the chaining effect is essentially neutral: the dataset already carries rich vitals (BMI, systolic/diastolic BP, glucose), so the upstream risk features are largely redundant.
+* **Unit note:** this dataset's `cholesterol`/`glucose` are recorded as ordinal categories (1–3); they are now mapped to representative mg/dL values during cleaning so the feature is on the same scale the dashboard sends (see audit finding C1).
 
 ---
 
@@ -77,6 +78,6 @@ The Hypertension (cardiovascular) dataset contains 70,000 patient records (35,02
 | Diabetes | Checkup-safe (mixed-sex 100k) | 88.80% | 0.9130 | — |
 | CKD | Checkup-safe (upstream) | 79.25% | 0.8921 | — |
 | Heart Disease | Chained checkup-safe | 89.76% | 0.9682 | +0.39% |
-| Hypertension | Chained checkup-safe | 73.69% | 0.8025 | +0.14% |
+| Hypertension | Chained checkup-safe | 73.71% | 0.8028 | +0.10% |
 
 The chaining gain is genuine but modest and concentrated in Heart Disease; see `reports/chaining_results.md` for a complementary ablation on two independent comorbidity cohorts.

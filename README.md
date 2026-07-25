@@ -15,7 +15,7 @@ Traditional medical AI predicts diseases in silos (e.g., a Diabetes model, a Hea
 
 ### The Evidence for Chaining
 We measure the chaining effect two ways — on the **deployed** models and on two **independent** comorbidity cohorts — and report it honestly:
-* **Deployed-model ablation** (5-fold CV, isolated vs. chained checkup-safe): Heart Disease **+0.39% accuracy / +0.004 AUC**; Hypertension **~neutral** (+0.14% acc, +0.000 AUC). The upstream signal helps Heart Disease but is largely redundant for Hypertension, which already has rich vitals.
+* **Deployed-model ablation** (5-fold CV, isolated vs. chained checkup-safe): Heart Disease **+0.39% accuracy / +0.004 AUC**; Hypertension **~neutral** (+0.10% acc, +0.000 AUC). The upstream signal helps Heart Disease but is largely redundant for Hypertension, which already has rich vitals.
 * **Cross-dataset ablation** (`reports/chaining_results.md`): every experiment moves **well under a percentage point** in either direction on two independent comorbidity cohorts.
 * **Bottom line**: chaining is a *modest, targeted* prior that helps most in populations with concurrent metabolic risk — **not** a blanket accuracy improvement. See the caveat below on cross-dataset upstream features.
 

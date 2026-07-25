@@ -3,10 +3,8 @@ import sys
 import joblib
 import streamlit as st
 import pandas as pd
-import numpy as np
 import shap
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if PROJECT_ROOT not in sys.path:
@@ -14,6 +12,7 @@ if PROJECT_ROOT not in sys.path:
 
 from src.chaining.cri import get_full_risk_profile
 from src.explainability.shap_engine import explain_prediction
+from src.schema import range_warnings
 
 from src.models.diabetes_model import _load_model_data as load_diabetes
 from src.models.ckd_model import _load_model_data as load_ckd
@@ -555,40 +554,23 @@ hr {
 
 # ── Helpers ─────────────────────────────────────────────────────────────────────
 def _risk_props(pct: float):
-    if pct < 30:
-        return {
-            'color':  '#0D9488',
-            'bg':     '#F0FDFB',
-            'border': '#99F6E4',
-            'label':  'Low',
-            'dot':    '#0D9488',
-        }
-    elif pct < 60:
-        return {
-            'color':  '#D97706',
-            'bg':     '#FFFBEB',
-            'border': '#FCD34D',
-            'label':  'Moderate',
-            'dot':    '#D97706',
-        }
+    # 4-tier framework at 25 / 50 / 75, matching the project's documented risk
+    # bands (Low / Medium / High / Critical).
+    if pct < 25:
+        return {'color': '#0D9488', 'bg': '#F0FDFB', 'border': '#99F6E4', 'label': 'Low',      'dot': '#0D9488'}
+    elif pct < 50:
+        return {'color': '#D97706', 'bg': '#FFFBEB', 'border': '#FCD34D', 'label': 'Medium',   'dot': '#D97706'}
+    elif pct < 75:
+        return {'color': '#EA580C', 'bg': '#FFF7ED', 'border': '#FED7AA', 'label': 'High',     'dot': '#EA580C'}
     else:
-        return {
-            'color':  '#DC2626',
-            'bg':     '#FEF2F2',
-            'border': '#FECACA',
-            'label':  'High',
-            'dot':    '#DC2626',
-        }
+        return {'color': '#DC2626', 'bg': '#FEF2F2', 'border': '#FECACA', 'label': 'Critical', 'dot': '#DC2626'}
 
-def encode_inputs(age, sex, bmi, sbp, dbp, glucose, chol, smoking, alcohol, pa, fh):
+def encode_inputs(age, sex, bmi, sbp, dbp, glucose, chol, smoking, alcohol, pa):
+    # All numeric features are in the canonical units declared in src/schema.py
+    # (glucose & cholesterol in mg/dL — every dataset is cleaned to these units).
     # Lifestyle features are encoded as binary because every model was trained
-    # on binary smoke/alcohol/activity flags (0/1). Offering intermediate values
-    # (e.g. 0.5) would feed the tree a value it never saw at training time, so
-    # the UI itself is kept binary to avoid promising granularity the model
-    # cannot honour.
-    # family_history maps to representative DiabetesPedigreeFunction values
-    # (the continuous quantity the diabetes model was trained on): ~lower- and
-    # ~upper-quartile pedigree scores, so the input lands in-distribution.
+    # on binary smoke/alcohol/activity flags (0/1); offering intermediate values
+    # would feed the tree a value it never saw at training time.
     return {
         'age':               float(age),
         'sex':               1.0 if sex == "Male" else 0.0,
@@ -600,27 +582,15 @@ def encode_inputs(age, sex, bmi, sbp, dbp, glucose, chol, smoking, alcohol, pa, 
         'smoking':           {'Non-smoker': 0.0, 'Smoker': 1.0}[smoking],
         'alcohol':           {'No': 0.0, 'Yes': 1.0}[alcohol],
         'physical_activity': {'Inactive': 0.0, 'Active': 1.0}[pa],
-        'family_history':    0.6 if fh == "Yes" else 0.2,
     }
 
 def validate_inputs(age, bmi, sbp, dbp, glucose, chol):
-    """Return list of (field, message) clinical range warnings."""
-    warnings = []
-    if not (1 <= age <= 110):
-        warnings.append(("Age", f"{age} is outside the expected range 1–110 years."))
-    if not (13.0 <= bmi <= 60.0):
-        warnings.append(("BMI", f"{bmi:.1f} is outside the physiologically plausible range 13–60."))
-    if not (70 <= sbp <= 220):
-        warnings.append(("Systolic BP", f"{sbp} mmHg is outside the expected range 70–220."))
-    if not (40 <= dbp <= 140):
-        warnings.append(("Diastolic BP", f"{dbp} mmHg is outside the expected range 40–140."))
-    if sbp <= dbp:
-        warnings.append(("BP relationship", f"Systolic BP ({sbp}) must be greater than Diastolic BP ({dbp})."))
-    if not (50 <= glucose <= 600):
-        warnings.append(("Fasting Glucose", f"{glucose} mg/dL is outside the expected range 50–600."))
-    if not (100 <= chol <= 500):
-        warnings.append(("Cholesterol", f"{chol} mg/dL is outside the expected range 100–500."))
-    return warnings
+    """Return (field, message) clinical-range warnings, driven by the canonical
+    ranges declared in src/schema.py (single source of truth)."""
+    return range_warnings({
+        'age': age, 'bmi': bmi, 'systolic_bp': sbp, 'diastolic_bp': dbp,
+        'glucose': glucose, 'cholesterol': chol,
+    })
 
 def make_gauge(pct: float, color: str) -> go.Figure:
     fig = go.Figure(go.Indicator(
@@ -643,9 +613,10 @@ def make_gauge(pct: float, color: str) -> go.Figure:
             'bordercolor': '#E2E5EA',
             'borderwidth': 1,
             'steps': [
-                {'range': [0,  30], 'color': '#F0FDFB'},
-                {'range': [30, 60], 'color': '#FFFBEB'},
-                {'range': [60,100], 'color': '#FEF2F2'},
+                {'range': [0,  25], 'color': '#F0FDFB'},
+                {'range': [25, 50], 'color': '#FFFBEB'},
+                {'range': [50, 75], 'color': '#FFF7ED'},
+                {'range': [75,100], 'color': '#FEF2F2'},
             ],
             'threshold': {
                 'line': {'color': color, 'width': 2},
@@ -811,7 +782,6 @@ with st.sidebar:
         smoking  = st.selectbox("Smoking Status",        ["Non-smoker", "Smoker"])
         alcohol  = st.selectbox("Regular Alcohol Use",   ["No", "Yes"])
         phys_act = st.selectbox("Physically Active",     ["Active", "Inactive"])
-        fam_hist = st.selectbox("Family History of Chronic Illness", ["No", "Yes"])
 
         st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
         submit = st.form_submit_button("Calculate Risk Profile", use_container_width=True)
@@ -894,7 +864,7 @@ else:
 
     patient_data = encode_inputs(
         age, sex, bmi, systolic_bp, diastolic_bp,
-        glucose, cholesterol, smoking, alcohol, phys_act, fam_hist,
+        glucose, cholesterol, smoking, alcohol, phys_act,
     )
 
     with st.spinner("Running chained model predictions & SHAP analysis…"):
@@ -915,15 +885,6 @@ else:
             patient_df_chain['ckd_risk']      = profile['ckd_risk']
 
             shap_res = {}
-            shap_waterfalls = {}
-            
-            def get_shap_explanation(model, patient_row: pd.DataFrame):
-                explainer = shap.Explainer(model)
-                shap_values = explainer(patient_row)
-                if len(shap_values.shape) == 3: # For multiclass
-                    return shap_values[0, :, 1]
-                return shap_values[0]
-                
             try:
                 dm = load_diabetes();  ckm = load_ckd()
                 hm = load_heart();     htm = load_hypertension()
@@ -931,14 +892,8 @@ else:
                 shap_res['CKD']           = explain_prediction(ckm['model'], patient_df[ckm['features']])
                 shap_res['Heart Disease'] = explain_prediction(hm['model'],  patient_df_chain[hm['features']])
                 shap_res['Hypertension']  = explain_prediction(htm['model'], patient_df_chain[htm['features']])
-                
-                shap_waterfalls['Diabetes'] = get_shap_explanation(dm['model'], patient_df[dm['features']])
-                shap_waterfalls['CKD'] = get_shap_explanation(ckm['model'], patient_df[ckm['features']])
-                shap_waterfalls['Heart Disease'] = get_shap_explanation(hm['model'], patient_df_chain[hm['features']])
-                shap_waterfalls['Hypertension'] = get_shap_explanation(htm['model'], patient_df_chain[htm['features']])
             except Exception:
                 shap_res = {}
-                shap_waterfalls = {}
 
             # ════════════════════════════════════
             # 1. CRI SECTION
@@ -951,8 +906,9 @@ else:
             with info_col:
                 desc = {
                     "Low":      "This patient presents a low overall comorbidity burden. Routine preventive care and annual screenings are recommended.",
-                    "Moderate": "This patient shows moderate comorbidity risk. A specialist review and targeted lifestyle interventions are advisable.",
-                    "High":     "This patient presents high comorbidity risk. Immediate clinical review, further diagnostics, and an intervention plan are strongly recommended.",
+                    "Medium":   "This patient shows emerging comorbidity risk with modifiable factors present. Targeted lifestyle intervention and monitoring are advisable.",
+                    "High":     "This patient presents high comorbidity risk with multiple concurrent factors. Clinical work-up and an intervention plan are strongly recommended.",
+                    "Critical": "This patient presents a critical comorbidity burden. Immediate clinical review, further diagnostics, and active management are strongly recommended.",
                 }[cri_props['label']]
 
                 st.markdown(f"""
@@ -990,7 +946,7 @@ else:
                 "Diabetes":      ("88.8%", "0.913"),
                 "CKD":           ("79.3%", "0.892"),
                 "Heart Disease": ("89.8%", "0.968"),
-                "Hypertension":  ("73.7%", "0.802"),
+                "Hypertension":  ("73.7%", "0.803"),
             }
             ckd_footnote = True
 
@@ -1077,13 +1033,13 @@ else:
             summary_df = pd.DataFrame({
                 "Feature":  ["Age", "Sex", "Height", "Weight", "BMI (Calculated)", "Upper BP", "Lower BP",
                              "Blood Sugar", "Total Cholesterol",
-                             "Smoking", "Alcohol", "Physical Activity", "Family History"],
+                             "Smoking", "Alcohol", "Physical Activity"],
                 "Value":    [str(age), str(sex), f"{height} cm", f"{weight} kg", f"{bmi:.1f}", f"{systolic_bp} mmHg", f"{diastolic_bp} mmHg",
                              f"{glucose} mg/dL", f"{cholesterol} mg/dL",
-                             str(smoking), str(alcohol), str(phys_act), str(fam_hist)],
+                             str(smoking), str(alcohol), str(phys_act)],
                 "Category": ["Demographic", "Demographic", "Vitals", "Vitals", "Vitals", "Vitals", "Vitals",
                              "Vitals", "Vitals",
-                             "Lifestyle", "Lifestyle", "Lifestyle", "History"],
+                             "Lifestyle", "Lifestyle", "Lifestyle"],
             })
             st.dataframe(summary_df, use_container_width=True, hide_index=True)
 
@@ -1104,7 +1060,7 @@ else:
                 metrics_df = pd.DataFrame({
                     "Model":      ["Diabetes", "CKD", "Heart Disease", "Hypertension"],
                     "Accuracy":   ["88.8%", "79.3%", "89.8%", "73.7%"],
-                    "ROC AUC":    ["0.913", "0.892", "0.968", "0.802"],
+                    "ROC AUC":    ["0.913", "0.892", "0.968", "0.803"],
                     "F1-Score":   ["0.553", "0.826", "0.898", "0.725"],
                     "Dataset Size":["79,444", "400", "1,025", "70,000"],
                     "Feature Set":["Checkup-safe (mixed-sex 100k)", "⚠ Reduced (lab tests removed)", "Chained checkup-safe", "Chained checkup-safe"],
@@ -1146,9 +1102,9 @@ else:
                 chaining_df = pd.DataFrame({
                     "Deployed Model":     ["Heart Disease", "Hypertension"],
                     "Dataset":            ["heart_clean (n=1,025)", "hypertension_clean (n=70,000)"],
-                    "Isolated Acc":       ["89.37%", "73.56%"],
-                    "Chained Acc":        ["89.76%", "73.69%"],
-                    "Δ Accuracy":         ["+0.39% ✓", "+0.14%"],
+                    "Isolated Acc":       ["89.37%", "73.61%"],
+                    "Chained Acc":        ["89.76%", "73.71%"],
+                    "Δ Accuracy":         ["+0.39% ✓", "+0.10%"],
                     "Isolated AUC":       ["0.964", "0.802"],
                     "Chained AUC":        ["0.968", "0.803"],
                 })
@@ -1231,7 +1187,7 @@ else:
                 # Re-run prediction with simulated inputs
                 sim_data = encode_inputs(
                     age, sex, sim_bmi, sim_sbp, diastolic_bp,
-                    sim_glucose, cholesterol, sim_smoking, alcohol, sim_pa, fam_hist,
+                    sim_glucose, cholesterol, sim_smoking, alcohol, sim_pa,
                 )
                 sim_profile = get_full_risk_profile(sim_data)
                 sim_cri_pct = round(sim_profile['cri'] * 100, 1)

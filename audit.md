@@ -21,6 +21,32 @@ This audit covers what **remains** after the chaining/leakage/diabetes-dataset f
 
 ---
 
+## Resolution status (updated 2026-07-25)
+
+A fix pass addressed the correctness and cleanup findings; the data-/research-dependent ones remain open.
+
+| Finding | Status | How |
+|---|---|---|
+| C1 hypertension cholesterol/glucose scale | ✅ Fixed | Ordinal 1–3 categories mapped to representative mg/dL in `clean_hypertension()`; model retrained. Cholesterol now spans 0.556→0.853 across the clinical range (was frozen at 0.7415). |
+| C1a schema not unit-aware | ✅ Fixed | `src/schema.py` now carries `FEATURE_UNITS`/`FEATURE_RANGES` + `range_warnings()`, and the dashboard validation is driven by it (schema is now live code). |
+| H1 `family_history` dead input | ✅ Fixed | Removed from the UI, `encode_inputs`, summary table, and config. |
+| H3 `ckd_risk` missing advice | ✅ Fixed | Added `ckd_risk` block to `clinical_guidelines.yaml`; removed the two unused keys. |
+| M2 3-tier vs 4-tier | ✅ Fixed | Dashboard now uses the documented 4-tier bands (25/50/75: Low/Medium/High/Critical). |
+| M6 stale advice text | ✅ Fixed | Lifestyle targets updated to match the binary UI. |
+| M5 no tests | ✅ Fixed | Added `tests/test_contracts.py` (7 contract tests: input-range/scale, no-dead-input, chaining wiring, CRI & eGFR numerics). |
+| L1 `schema.py` dead | ✅ Fixed | Now imported and enforced (see C1a). |
+| L2 dead `test_import.py`/`templates.py` | ✅ Fixed | Both removed. |
+| L3 dead SHAP-waterfall compute | ✅ Fixed | Removed 4 unused explainer calls per prediction. |
+| L4 duplicated helper | ✅ Fixed | Inline `get_shap_explanation` removed with L3. |
+| L7 unused imports | ✅ Fixed | `numpy`, `make_subplots` removed from the dashboard. |
+| **H2 CKD still 400 rows** | ⏳ Open | Blocked on fetching NHANES files (env blocks cdc.gov); builder + guide already in repo. |
+| **M1 untuned threshold** | ⏳ Open | Reporting/operating-point work — deferred. |
+| **M3 CRI weights unvalidated** | ⏳ Open | Needs a multi-disease cohort to calibrate against. |
+| **M4 cross-dataset chaining shift** | ⏳ Open | Inherent; needs a single multi-label cohort. |
+| L5 fragile SHAP indexing · L6 unused eval metadata · L8 LICENSE/model card/LFS | ⏳ Open | Minor / housekeeping. |
+
+---
+
 ## 🔴 CRITICAL
 
 ### C1. Hypertension model: cholesterol & glucose are sent on the wrong scale — cholesterol is completely inert

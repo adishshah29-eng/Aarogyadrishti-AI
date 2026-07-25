@@ -32,19 +32,19 @@ features:
   smoking:
     name: "Smoking Habit"
     unit: ""
-    positive_advice: "Quitting smoking (target: Never) is the single best action you can take to immediately reduce your health risks."
+    positive_advice: "Quitting smoking (target: Non-smoker) is the single best action you can take to immediately reduce your health risks."
     negative_advice: "By not smoking, you are giving your heart and lungs the best possible protection."
 
   alcohol:
     name: "Alcohol Intake"
     unit: ""
-    positive_advice: "Reducing alcohol consumption (target: None or Occasional) can improve liver function and lower blood pressure."
-    negative_advice: "Your low alcohol consumption helps protect your liver and blood pressure."
+    positive_advice: "Reducing regular alcohol use (target: No) can improve liver function and lower blood pressure."
+    negative_advice: "Not drinking regularly helps protect your liver and blood pressure."
 
   physical_activity:
     name: "Physical Activity Level"
     unit: ""
-    positive_advice: "Increasing your daily physical activity (target: Moderate or High) strengthens your cardiovascular system."
+    positive_advice: "Becoming physically active (target: Active) strengthens your cardiovascular system."
     negative_advice: "Your active lifestyle acts as a strong protective shield for your cardiovascular health."
 
   age:
@@ -59,20 +59,14 @@ features:
     positive_advice: "Biological factors can influence the baseline risk for this condition."
     negative_advice: "Biological factors can naturally lower the baseline risk for this condition."
 
-  family_history:
-    name: "Family History"
-    unit: ""
-    positive_advice: "Genetics play a strong role here, meaning regular screening is highly recommended."
-    negative_advice: "A lack of family history for this condition works in your favor."
-
   diabetes_risk:
     name: "Diabetes Risk Score"
     unit: "%"
     positive_advice: "Your risk level for diabetes acts as an accelerator for cardiovascular and kidney conditions (target: <30%)."
     negative_advice: "Your low diabetes risk helps keep your entire metabolic system stable."
 
-  hypertension_risk:
-    name: "Hypertension Risk Score"
+  ckd_risk:
+    name: "Kidney (CKD) Risk Score"
     unit: "%"
-    positive_advice: "High blood pressure risk heavily influences heart and kidney health (target: <30%)."
-    negative_advice: "Your low hypertension risk protects your vascular system from strain."
+    positive_advice: "Elevated kidney-disease risk strains the cardiovascular system and compounds heart and blood-pressure risk (target: <30%)."
+    negative_advice: "Your low kidney-disease risk helps protect your heart and vascular system."

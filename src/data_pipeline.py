@@ -320,9 +320,18 @@ def clean_hypertension(path: str) -> pd.DataFrame:
     df_clean['systolic_bp'] = df['ap_hi'].astype(float)
     df_clean['diastolic_bp'] = df['ap_lo'].astype(float)
     
-    df_clean['cholesterol'] = df['cholesterol'].astype(float)
-    df_clean['glucose'] = df['gluc'].astype(float)
-    
+    # The cardio dataset codes cholesterol/glucose as ordinal categories
+    # (1 = normal, 2 = above normal, 3 = well above normal). Every other dataset
+    # — and the dashboard — uses clinical mg/dL. Map the categories to
+    # representative mg/dL midpoints so the canonical schema is unit-consistent
+    # across all models (see src/schema.py). Without this the hypertension model
+    # would be trained on 1-3 while receiving 100-400 at inference, saturating
+    # the trees and making cholesterol inert.
+    chol_to_mgdl = {1.0: 180.0, 2.0: 220.0, 3.0: 270.0}   # normal / borderline-high / high
+    gluc_to_mgdl = {1.0: 90.0, 2.0: 115.0, 3.0: 160.0}    # normal / impaired / diabetic-range
+    df_clean['cholesterol'] = df['cholesterol'].astype(float).map(chol_to_mgdl)
+    df_clean['glucose'] = df['gluc'].astype(float).map(gluc_to_mgdl)
+
     df_clean['smoking'] = df['smoke'].astype(float)
     df_clean['alcohol'] = df['alco'].astype(float)
     df_clean['physical_activity'] = df['active'].astype(float)
