@@ -4,7 +4,74 @@ import numpy as np
 
 def clean_diabetes(path: str) -> pd.DataFrame:
     """
-    Clean the Diabetes (Pima) dataset.
+    Clean the 100k mixed-sex Diabetes Prediction dataset (Kaggle: iammustafatz,
+    CC0). Columns: gender, age, hypertension, heart_disease, smoking_history,
+    bmi, HbA1c_level, blood_glucose_level, diabetes.
+
+    This replaces the female-only Pima dataset as the diabetes training source
+    so the model is validated across both sexes. Steps:
+    - Drop exact duplicate rows and restrict to adults (age >= 18) to match a
+      screening context.
+    - Map gender -> sex (Male=1.0, Female=0.0); drop the handful of 'Other' rows.
+    - Map columns onto the canonical schema; clip implausible BMI.
+    - Binarize smoking_history into a current/active-smoking flag.
+    - Keep HbA1c_level, hypertension, heart_disease as extra columns for the
+      full-feature baseline only (NOT used by the shipped checkup-safe model:
+      HbA1c is a diagnostic marker, and the two comorbidity labels would create
+      circularity in the upstream->downstream chain).
+    """
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Raw diabetes file not found at {path}")
+
+    df = pd.read_csv(path)
+    df = df.drop_duplicates()
+    df = df[df['age'] >= 18].copy()
+
+    # Map gender -> sex; 'Other' (a few rows) has no clear encoding, so drop it.
+    df['sex_mapped'] = df['gender'].map({'Male': 1.0, 'Female': 0.0})
+    df = df[df['sex_mapped'].notna()].copy()
+    # Reset the (now gappy) index so Series assignments below align positionally
+    # into the fresh df_clean rather than by mismatched index labels.
+    df = df.reset_index(drop=True)
+
+    # Binarize smoking history into an active/ever-smoking risk flag.
+    # 'No Info' is unknown -> treated as non-smoker (the majority class).
+    smoke_map = {
+        'never': 0.0, 'No Info': 0.0, 'not current': 0.0,
+        'former': 1.0, 'current': 1.0, 'ever': 1.0,
+    }
+    smoking = df['smoking_history'].map(smoke_map).fillna(0.0)
+
+    df_clean = pd.DataFrame()
+    df_clean['patient_id'] = [f"dpd_{i}" for i in range(len(df))]
+    df_clean['age'] = df['age'].astype(float)
+    df_clean['sex'] = df['sex_mapped'].astype(float)
+    df_clean['bmi'] = df['bmi'].astype(float).clip(13.0, 60.0)
+    df_clean['systolic_bp'] = np.nan
+    df_clean['diastolic_bp'] = np.nan
+    df_clean['glucose'] = df['blood_glucose_level'].astype(float)
+    df_clean['cholesterol'] = np.nan
+    df_clean['smoking'] = smoking.astype(float)
+    df_clean['alcohol'] = np.nan
+    df_clean['physical_activity'] = np.nan
+    df_clean['family_history'] = np.nan  # not available in this dataset
+
+    # Extra features retained for the full-feature baseline model only.
+    df_clean['HbA1c_level'] = df['HbA1c_level'].astype(float)
+    df_clean['hypertension'] = df['hypertension'].astype(float)
+    df_clean['heart_disease'] = df['heart_disease'].astype(float)
+
+    # Target (kept as 'Outcome' for interface compatibility)
+    df_clean['Outcome'] = df['diabetes'].astype(int)
+
+    return df_clean.reset_index(drop=True)
+
+
+def clean_diabetes_pima(path: str) -> pd.DataFrame:
+    """
+    Clean the legacy Diabetes (Pima Indians) dataset. Retained for provenance;
+    the shipped diabetes model now trains on the 100k mixed-sex dataset via
+    clean_diabetes(). The Pima cohort is female-only.
     - Treat invalid 0s in Glucose, BloodPressure, SkinThickness, Insulin, BMI as NaN.
     - Map columns to the canonical schema.
     - Perform median imputation.
@@ -278,8 +345,8 @@ if __name__ == "__main__":
     processed_dir = os.path.join(PROJECT_ROOT, "data", "processed")
     os.makedirs(processed_dir, exist_ok=True)
 
-    print("Cleaning diabetes dataset...")
-    df_dia = clean_diabetes(os.path.join(raw_dir, "diabetes.csv"))
+    print("Cleaning diabetes dataset (100k mixed-sex)...")
+    df_dia = clean_diabetes(os.path.join(raw_dir, "diabetes_100k.csv"))
     df_dia.to_csv(os.path.join(processed_dir, "diabetes_clean.csv"), index=False)
     print(f"Saved cleaned diabetes dataset to processed/diabetes_clean.csv (Shape: {df_dia.shape})")
 

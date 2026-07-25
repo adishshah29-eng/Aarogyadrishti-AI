@@ -987,9 +987,9 @@ else:
             # Model accuracy annotations per disease (5-fold CV, checkup-safe;
             # Heart & Hypertension are the shipped *chained* models).
             model_acc = {
-                "Diabetes":      ("75.9%", "0.830"),
+                "Diabetes":      ("88.8%", "0.913"),
                 "CKD":           ("79.3%", "0.892"),
-                "Heart Disease": ("90.2%", "0.974"),
+                "Heart Disease": ("89.8%", "0.968"),
                 "Hypertension":  ("73.7%", "0.802"),
             }
             ckd_footnote = True
@@ -1103,11 +1103,11 @@ else:
                 # ── Metrics table ──
                 metrics_df = pd.DataFrame({
                     "Model":      ["Diabetes", "CKD", "Heart Disease", "Hypertension"],
-                    "Accuracy":   ["75.9%", "79.3%", "90.2%", "73.7%"],
-                    "ROC AUC":    ["0.830", "0.892", "0.974", "0.802"],
-                    "F1-Score":   ["0.676", "0.826", "0.902", "0.725"],
-                    "Dataset Size":["768", "400", "1,025", "70,000"],
-                    "Feature Set":["Checkup-safe", "⚠ Reduced (lab tests removed)", "Chained checkup-safe", "Chained checkup-safe"],
+                    "Accuracy":   ["88.8%", "79.3%", "89.8%", "73.7%"],
+                    "ROC AUC":    ["0.913", "0.892", "0.968", "0.802"],
+                    "F1-Score":   ["0.553", "0.826", "0.898", "0.725"],
+                    "Dataset Size":["79,444", "400", "1,025", "70,000"],
+                    "Feature Set":["Checkup-safe (mixed-sex 100k)", "⚠ Reduced (lab tests removed)", "Chained checkup-safe", "Chained checkup-safe"],
                 })
                 st.dataframe(metrics_df, use_container_width=True, hide_index=True)
 
@@ -1147,10 +1147,10 @@ else:
                     "Deployed Model":     ["Heart Disease", "Hypertension"],
                     "Dataset":            ["heart_clean (n=1,025)", "hypertension_clean (n=70,000)"],
                     "Isolated Acc":       ["89.37%", "73.56%"],
-                    "Chained Acc":        ["90.24%", "73.69%"],
-                    "Δ Accuracy":         ["+0.87% ✓", "+0.13%"],
+                    "Chained Acc":        ["89.76%", "73.69%"],
+                    "Δ Accuracy":         ["+0.39% ✓", "+0.14%"],
                     "Isolated AUC":       ["0.964", "0.802"],
-                    "Chained AUC":        ["0.974", "0.802"],
+                    "Chained AUC":        ["0.968", "0.803"],
                 })
                 st.dataframe(chaining_df, use_container_width=True, hide_index=True)
 
@@ -1159,12 +1159,11 @@ else:
                   <p>
                     <strong style="color:var(--teal-600)">Key Finding —</strong>
                     The chaining benefit is real but small and uneven. On the deployed Heart model it adds
-                    <strong>+0.87% accuracy / +0.010 AUC</strong>; on Hypertension it is essentially neutral
+                    <strong>+0.39% accuracy / +0.004 AUC</strong>; on Hypertension it is essentially neutral
                     (upstream signal is already captured by the richer vitals). A wider ablation on two
                     independent comorbidity cohorts (see <code>reports/chaining_results.md</code>) shows the
-                    same pattern — a modest gain concentrated in high-comorbidity populations (up to +1.49% on
-                    BRFSS), and near-zero or slightly negative elsewhere. Chaining is a targeted prior, not a
-                    blanket accuracy win.
+                    same pattern — every experiment moves well under a percentage point in either direction.
+                    Chaining is a targeted prior, not a blanket accuracy win.
                   </p>
                 </div>
 
@@ -1191,15 +1190,16 @@ else:
                   <div style="font-size:0.82rem;color:#991B1B;line-height:1.7">
                     This is a <strong>screening tool, not a diagnostic instrument.</strong>
                     Results must be reviewed by a qualified clinician before any clinical decision.
-                    <strong>Diabetes model:</strong> trained on the Pima Indians cohort, which is
-                    <strong>female-only</strong> (age 21+); scores for male patients are an
-                    extrapolation outside the validated population.
+                    <strong>Diabetes model:</strong> trained on a 100k-row, <strong>mixed-sex</strong>
+                    adult dataset (≈48k female / 31k male), so both sexes are represented; note the
+                    outcome is imbalanced (~11% positive), which lowers F1 at the default threshold even
+                    though AUC is strong (0.91).
                     <strong>Chaining:</strong> the upstream Diabetes/CKD risk features fed to the Heart
                     and Hypertension models were, at training time, computed on datasets missing some
                     inputs (median-imputed), so those features carry less signal in training than at
                     live inference — a cross-dataset limitation, not a validated end-to-end pipeline.
-                    <strong>CKD model:</strong> reduced features — a full lab panel is needed for
-                    clinical CKD diagnosis. BRFSS data is self-reported.
+                    <strong>CKD model:</strong> still only 400 rows with reduced features — a full lab
+                    panel is needed for clinical CKD diagnosis. BRFSS data is self-reported.
                   </div>
                 </div>
                 """, unsafe_allow_html=True)

@@ -1,12 +1,16 @@
 """
 Diabetes risk model (upstream).
 
-Training cohort: the Pima Indians Diabetes dataset, which contains **female
-patients only** (age 21+). Because every row has ``sex = 0.0``, that column
-carries zero variance and cannot contribute to the model, so it is
-deliberately excluded from the feature set. Applying this model to male
-patients is an extrapolation outside its validated population; the dashboard
-surfaces this caveat to the user.
+Training cohort: the 100k-row Diabetes Prediction dataset (Kaggle: iammustafatz,
+CC0), which contains **both sexes** (~48k female / ~31k male adults after
+cleaning). This replaces the legacy female-only Pima dataset, so ``sex`` is now
+a genuine, non-degenerate feature and the model is validated across both sexes.
+
+Checkup-safe feature set: age, sex, bmi, glucose, smoking. The dataset's
+HbA1c_level (a diagnostic marker) and the hypertension/heart_disease labels are
+kept only for the full-feature baseline — HbA1c would trivialise the task, and
+using the comorbidity labels as inputs would make the upstream->downstream chain
+circular.
 """
 import os
 import pandas as pd
@@ -28,12 +32,11 @@ def train_and_evaluate():
         raise FileNotFoundError(f"Cleaned diabetes data not found at {data_path}")
     df = pd.read_csv(data_path)
 
-    # Define features
-    # 'sex' is intentionally omitted: the Pima cohort is female-only, so the
-    # column is constant (zero variance) and only invites out-of-distribution
-    # use on male patients.
-    baseline_features = ['Pregnancies', 'glucose', 'diastolic_bp', 'SkinThickness', 'Insulin', 'bmi', 'family_history', 'age']
-    checkup_safe_features = ['age', 'bmi', 'diastolic_bp', 'glucose', 'family_history']
+    # Define features. 'sex' is a real feature again now that the training data
+    # spans both sexes. The baseline adds the diagnostic/comorbidity columns for
+    # comparison only; the shipped checkup-safe set stays non-invasive.
+    baseline_features = ['age', 'sex', 'bmi', 'glucose', 'smoking', 'HbA1c_level', 'hypertension', 'heart_disease']
+    checkup_safe_features = ['age', 'sex', 'bmi', 'glucose', 'smoking']
     target_col = 'Outcome'
     
     X_base = df[baseline_features]

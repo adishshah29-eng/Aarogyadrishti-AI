@@ -10,22 +10,23 @@ All numbers below are **5-fold cross-validation** with **SMOTE applied only on t
 
 ## 1. Diabetes Model Performance
 
-The diabetes dataset contains 768 patient records (500 negative, 268 positive). **Cohort note:** the Pima Indians dataset is **female-only**, so the constant `sex` column was dropped from the checkup-safe feature set — it carried zero variance and only invited out-of-distribution use on male patients.
+**Data source (upgraded):** the diabetes model now trains on the 100k-row [Diabetes Prediction dataset](https://www.kaggle.com/datasets/iammustafatz/diabetes-prediction-dataset) (CC0), replacing the legacy female-only Pima set. After dropping exact duplicates, restricting to adults (age ≥ 18), and removing the handful of `Other`-gender rows, **79,444 records** remain (≈48k female / 31k male). The outcome is imbalanced at **~10.6% positive**. `sex` is now a genuine, non-degenerate feature.
 
 | Model Version | Accuracy | ROC AUC | F1-Score | Confusion Matrix (TN, FP, FN, TP) |
 |---|---|---|---|---|
-| **Baseline (Full-feature)** | 73.70% | 0.8196 | 0.6492 | TN: 379, FP: 121, FN: 81, TP: 187 |
-| **Checkup-Safe (SHIPS)** | **75.91%** | **0.8304** | **0.6756** | TN: 387, FP: 113, FN: 72, TP: 196 |
+| **Baseline (Full-feature, +HbA1c & comorbidity labels)** | **96.47%** | **0.9723** | **0.8031** | TN: 70907, FP: 137, FN: 2671, TP: 5729 |
+| **Checkup-Safe (SHIPS)** | 88.80% | 0.9130 | 0.5534 | TN: 65035, FP: 6009, FN: 2886, TP: 5514 |
 
 ### Tradeoff Analysis & Observations
-* **Noise Reduction**: The checkup-safe model again performs slightly **better** than the full-feature model. The raw dataset contains features with heavy missingness (`Insulin` ~49% missing, `SkinThickness` ~30%); median-imputing them injects noise. The checkup-safe features `glucose`, `age`, `bmi`, `diastolic_bp`, and `family_history` give a cleaner decision boundary.
-* **Feature set (shipped)**: `age`, `bmi`, `diastolic_bp`, `glucose`, `family_history` (no `sex`).
+* **Feature set (shipped)**: `age`, `sex`, `bmi`, `glucose`, `smoking`. The baseline additionally uses `HbA1c_level`, `hypertension`, and `heart_disease`. `HbA1c` is a diagnostic marker (it largely *defines* diabetes, hence the near-96% baseline) and is deliberately excluded from the checkup-safe model; the two comorbidity labels are excluded to avoid circularity in the upstream→downstream chain.
+* **AUC vs F1**: the checkup-safe AUC of **0.913** is strong (up from 0.83 on the old female-only set). The lower **F1 (0.553)** is a consequence of the 10.6% class imbalance at the default 0.5 threshold — with far more negatives, false positives depress precision even though ranking (AUC) is good. Threshold tuning would trade this off for a deployment.
+* **Population validity**: the key win is that scores are now validated across **both sexes**, not extrapolated from a female-only cohort.
 
 ---
 
 ## 2. Chronic Kidney Disease (CKD) Model Performance
 
-The CKD dataset contains 400 patient records (150 notckd, 250 ckd).
+The CKD dataset contains 400 patient records (150 notckd, 250 ckd). *(Unchanged in this iteration — see README for the recommended NHANES upgrade path.)*
 
 | Model Version | Accuracy | ROC AUC | F1-Score | Confusion Matrix (TN, FP, FN, TP) |
 |---|---|---|---|---|
@@ -33,8 +34,8 @@ The CKD dataset contains 400 patient records (150 notckd, 250 ckd).
 | **Checkup-Safe (SHIPS)** | 79.25% | 0.8921 | 0.8259 | TN: 118, FP: 32, FN: 51, TP: 199 |
 
 ### Tradeoff Analysis & Observations
-* **Expected Performance Drop**: The checkup-safe CKD model drops ~18.5% accuracy versus baseline, because the baseline has access to direct biochemical markers (`serum_creatinine`, `haemoglobin`, `packed_cell_volume`, `albumin`, urine specific gravity) that are only ordered during active diagnostic workups and are therefore unavailable at early-warning screening time.
-* **Early-Warning Utility**: Using only `age`, `diastolic_bp`, and `glucose`, the checkup-safe model still reaches **79.25% accuracy / 0.8921 AUC** — useful for flags before symptoms occur, but **not** a diagnostic substitute for a full lab panel.
+* **Expected Performance Drop**: the checkup-safe CKD model drops ~18.5% accuracy versus baseline, because the baseline has access to direct biochemical markers (`serum_creatinine`, `haemoglobin`, `packed_cell_volume`, `albumin`, urine specific gravity) that are only ordered during active diagnostic workups.
+* **Caveat**: at 400 rows the baseline exhibits near-perfect separation — treat its 0.998 AUC as optimistic. The checkup-safe model (`age`, `diastolic_bp`, `glucose`) is an early-warning flag, **not** a diagnostic substitute.
 
 ---
 
@@ -46,11 +47,11 @@ The Heart Disease dataset contains 1,025 patient records (499 negative, 526 posi
 |---|---|---|---|---|
 | **Baseline (Full clinical panel)** | **99.51%** | **0.9974** | **0.9952** | TN: 497, FP: 2, FN: 3, TP: 523 |
 | **Isolated (Checkup-safe)** | 89.37% | 0.9639 | 0.8938 | TN: 455, FP: 44, FN: 65, TP: 461 |
-| **Chained (Checkup-safe, SHIPS)** | 90.24% | 0.9741 | 0.9023 | TN: 457, FP: 42, FN: 58, TP: 468 |
+| **Chained (Checkup-safe, SHIPS)** | 89.76% | 0.9682 | 0.8977 | TN: 455, FP: 44, FN: 61, TP: 465 |
 
 ### Chaining Effect
-* **Chained − Isolated: +0.87% accuracy, +0.0102 ROC AUC.** Adding the upstream Diabetes/CKD risk features gives a small but consistent improvement for Heart Disease on the deployed dataset.
-* **Baseline gap**: the full clinical panel (`cp`, `oldpeak`, `ca`, `thal`, …) remains far stronger; the checkup-safe model is a pre-symptomatic screen, not a replacement for diagnostic work-up.
+* **Chained − Isolated: +0.39% accuracy, +0.0043 ROC AUC.** Adding the upstream Diabetes/CKD risk features gives a small but positive improvement for Heart Disease on the deployed dataset.
+* The full clinical panel (`cp`, `oldpeak`, `ca`, `thal`, …) remains far stronger; the checkup-safe model is a pre-symptomatic screen.
 
 ---
 
@@ -62,11 +63,10 @@ The Hypertension (cardiovascular) dataset contains 70,000 patient records (35,02
 |---|---|---|---|---|
 | **Baseline (Full-feature)** | 73.62% | 0.8029 | 0.7246 | TN: 27242, FP: 7779, FN: 10686, TP: 24293 |
 | **Isolated (Checkup-safe)** | 73.56% | 0.8024 | 0.7243 | TN: 27178, FP: 7843, FN: 10667, TP: 24312 |
-| **Chained (Checkup-safe, SHIPS)** | **73.69%** | 0.8024 | **0.7254** | TN: 27259, FP: 7762, FN: 10653, TP: 24326 |
+| **Chained (Checkup-safe, SHIPS)** | **73.69%** | 0.8025 | **0.7251** | TN: 27289, FP: 7732, FN: 10683, TP: 24296 |
 
 ### Chaining Effect
-* **Chained − Isolated: +0.13% accuracy, ~0.0000 ROC AUC.** For Hypertension the chaining effect is essentially neutral: the dataset already carries rich vitals (BMI, systolic/diastolic BP, glucose), so the upstream risk features are largely redundant.
-* **Baseline vs checkup-safe**: nearly identical — the only dropped features are raw `height`/`weight`, whose information is already captured by BMI.
+* **Chained − Isolated: +0.14% accuracy, ~0.0001 ROC AUC.** For Hypertension the chaining effect is essentially neutral: the dataset already carries rich vitals (BMI, systolic/diastolic BP, glucose), so the upstream risk features are largely redundant.
 
 ---
 
@@ -74,9 +74,9 @@ The Hypertension (cardiovascular) dataset contains 70,000 patient records (35,02
 
 | Model | Ships as | CV Accuracy | CV ROC AUC | Chaining Δ Acc |
 |---|---|---|---|---|
-| Diabetes | Checkup-safe (upstream) | 75.91% | 0.8304 | — |
+| Diabetes | Checkup-safe (mixed-sex 100k) | 88.80% | 0.9130 | — |
 | CKD | Checkup-safe (upstream) | 79.25% | 0.8921 | — |
-| Heart Disease | Chained checkup-safe | 90.24% | 0.9741 | +0.87% |
-| Hypertension | Chained checkup-safe | 73.69% | 0.8024 | +0.13% |
+| Heart Disease | Chained checkup-safe | 89.76% | 0.9682 | +0.39% |
+| Hypertension | Chained checkup-safe | 73.69% | 0.8025 | +0.14% |
 
 The chaining gain is genuine but modest and concentrated in Heart Disease; see `reports/chaining_results.md` for a complementary ablation on two independent comorbidity cohorts.

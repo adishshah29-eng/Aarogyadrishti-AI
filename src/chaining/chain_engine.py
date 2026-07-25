@@ -205,11 +205,10 @@ def run_chaining_evaluation():
         f.write("\n## Rationale & Key Takeaways\n\n")
         f.write(f"1. **The effect is small and dataset-dependent, not a blanket improvement.** Across "
                 f"the {len(results)} experiments, chaining helped in {n_pos}, was roughly neutral in "
-                f"{n_flat}, and slightly hurt in {n_neg}. The largest gain was **{best_delta:+.2%} "
-                f"accuracy** on \"{best['experiment']}\", where metabolic-syndrome comorbidity burden "
-                f"is highest; the other experiments moved by well under a percentage point in either "
-                f"direction. Chaining should be read as a *modest, targeted* prior for comorbid "
-                f"populations, not as a general accuracy win.\n")
+                f"{n_flat}, and slightly hurt in {n_neg}. The largest accuracy movement was "
+                f"**{best_delta:+.2%}** (on \"{best['experiment']}\"); every experiment moved by well "
+                f"under a percentage point in either direction. Chaining should be read as a *modest, "
+                f"targeted* prior for comorbid populations, not as a general accuracy win.\n")
         f.write("2. **Metabolic Syndrome Overlap**: High blood glucose (diabetes) and impaired "
                 "filtration (CKD) are pathologically linked to vascular strain and atherosclerotic "
                 "progression, which is the plausible mechanism for any gain the chained model "

@@ -6,14 +6,14 @@ This report is an **ablation** on two independent comorbidity datasets (a stroke
 
 | Experiment / Dataset | Isolated Accuracy | Chained Accuracy | Accuracy Delta | Isolated ROC AUC | Chained ROC AUC | ROC AUC Delta |
 |---|---|---|---|---|---|---|
-| Heart + Hypertension Dataset (Predict Heart Disease) | 88.38% | 88.53% | **+0.16%** | 0.8324 | 0.8342 | **+0.0018** |
-| Heart + Hypertension Dataset (Predict Hypertension) | 85.17% | 85.01% | **-0.16%** | 0.7698 | 0.7690 | **-0.0008** |
-| BRFSS Dataset (Predict Heart Disease) | 80.98% | 82.47% | **+1.49%** | 0.7793 | 0.7811 | **+0.0018** |
-| BRFSS Dataset (Predict Hypertension) | 70.36% | 70.34% | **-0.02%** | 0.7777 | 0.7782 | **+0.0005** |
+| Heart + Hypertension Dataset (Predict Heart Disease) | 88.38% | 88.22% | **-0.16%** | 0.8324 | 0.8313 | **-0.0011** |
+| Heart + Hypertension Dataset (Predict Hypertension) | 85.17% | 85.50% | **+0.33%** | 0.7698 | 0.7676 | **-0.0022** |
+| BRFSS Dataset (Predict Heart Disease) | 80.98% | 81.10% | **+0.11%** | 0.7793 | 0.7798 | **+0.0005** |
+| BRFSS Dataset (Predict Hypertension) | 70.36% | 70.48% | **+0.12%** | 0.7777 | 0.7777 | **-0.0000** |
 
 ## Rationale & Key Takeaways
 
-1. **The effect is small and dataset-dependent, not a blanket improvement.** Across the 4 experiments, chaining helped in 2, was roughly neutral in 1, and slightly hurt in 1. The largest gain was **+1.49% accuracy** on "BRFSS Dataset (Predict Heart Disease)", where metabolic-syndrome comorbidity burden is highest; the other experiments moved by well under a percentage point in either direction. Chaining should be read as a *modest, targeted* prior for comorbid populations, not as a general accuracy win.
+1. **The effect is small and dataset-dependent, not a blanket improvement.** Across the 4 experiments, chaining helped in 3, was roughly neutral in 0, and slightly hurt in 1. The largest accuracy movement was **+0.33%** (on "Heart + Hypertension Dataset (Predict Hypertension)"); every experiment moved by well under a percentage point in either direction. Chaining should be read as a *modest, targeted* prior for comorbid populations, not as a general accuracy win.
 2. **Metabolic Syndrome Overlap**: High blood glucose (diabetes) and impaired filtration (CKD) are pathologically linked to vascular strain and atherosclerotic progression, which is the plausible mechanism for any gain the chained model captures. The near-zero deltas elsewhere show the signal is largely redundant once the isolated features are present.
 
 > **Caveat:** upstream risks here are produced by models trained on *different* datasets, with some inputs median-imputed for these cohorts, so the upstream feature is a partial proxy — see the cross-dataset caveat in `reports/handoff_chaining_cri.md`.

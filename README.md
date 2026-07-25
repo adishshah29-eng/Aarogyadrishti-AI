@@ -15,8 +15,8 @@ Traditional medical AI predicts diseases in silos (e.g., a Diabetes model, a Hea
 
 ### The Evidence for Chaining
 We measure the chaining effect two ways — on the **deployed** models and on two **independent** comorbidity cohorts — and report it honestly:
-* **Deployed-model ablation** (5-fold CV, isolated vs. chained checkup-safe): Heart Disease **+0.87% accuracy / +0.010 AUC**; Hypertension **~neutral** (+0.13% acc, +0.000 AUC). The upstream signal helps Heart Disease but is largely redundant for Hypertension, which already has rich vitals.
-* **Cross-dataset ablation** (`reports/chaining_results.md`): a modest gain of up to **+1.49% accuracy** on the high-comorbidity BRFSS cohort, with near-zero or slightly negative deltas on the others.
+* **Deployed-model ablation** (5-fold CV, isolated vs. chained checkup-safe): Heart Disease **+0.39% accuracy / +0.004 AUC**; Hypertension **~neutral** (+0.14% acc, +0.000 AUC). The upstream signal helps Heart Disease but is largely redundant for Hypertension, which already has rich vitals.
+* **Cross-dataset ablation** (`reports/chaining_results.md`): every experiment moves **well under a percentage point** in either direction on two independent comorbidity cohorts.
 * **Bottom line**: chaining is a *modest, targeted* prior that helps most in populations with concurrent metabolic risk — **not** a blanket accuracy improvement. See the caveat below on cross-dataset upstream features.
 
 ---
@@ -52,7 +52,7 @@ We measure the chaining effect two ways — on the **deployed** models and on tw
 
 ## ⚠️ Limitations & Ethics
 AarogyaDrishti AI is a **screening tool, not a diagnostic instrument**. It is intended to triage patients and highlight unseen risk vectors, but **results must be reviewed by a qualified clinician**.
-* **Diabetes cohort bias**: The diabetes model is trained on the Pima Indians dataset, which contains **female patients only** (age 21+). The constant `sex` column is therefore excluded from the model, and scores produced for **male** patients are an extrapolation outside the validated population.
+* **Diabetes data (improved)**: The diabetes model now trains on the 100k-row [Diabetes Prediction dataset](https://www.kaggle.com/datasets/iammustafatz/diabetes-prediction-dataset) (CC0), which contains **both sexes** (≈48k female / 31k male adults after cleaning) — replacing the legacy female-only Pima cohort. `sex` is now a genuine feature. Caveats that remain: the outcome is imbalanced (~11% positive, which lowers F1 at the default threshold although AUC is strong ≈0.91), and the set lacks blood-pressure, cholesterol, and family-history fields (imputed at inference).
+* **CKD data (still limited)**: The CKD model still uses the small 400-row UCI set (near-perfect separation on the full panel; 79.3% on checkup-safe features). A larger, both-sex CKD source (e.g. NHANES with eGFR from serum creatinine) is the recommended next upgrade.
 * **Cross-dataset chaining caveat**: The upstream Diabetes/CKD risk features consumed by the Heart and Hypertension models are, at training time, computed on datasets that lack some of their inputs (median-imputed). Those upstream features therefore carry less signal during training than they do at live inference, where the full checkup panel is present. This is an inherent limitation of chaining models each trained on a different public dataset; it is documented, not a validated end-to-end training pipeline.
-* **Dataset Bias**: The models were trained on public datasets (PIMA Indians, BRFSS, UCI, Cleveland) which carry demographic biases and rely partly on self-reported data.
-* **Feature Reduction**: The CKD model was pruned to checkup-safe features (accuracy 97.8% → 79.3%) for deployability in low-resource settings. Full lab panels are required for clinical diagnosis.
+* **General bias**: The models are trained on public datasets (Diabetes Prediction 100k, BRFSS, UCI, Cleveland/Kaggle) which carry demographic biases and rely partly on self-reported data.
