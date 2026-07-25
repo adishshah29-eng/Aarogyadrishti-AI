@@ -178,9 +178,22 @@ def run_chaining_evaluation():
     # Write report
     report_path = os.path.join(os.path.dirname(__file__), "..", "..", "reports", "chaining_results.md")
     report_path = os.path.abspath(report_path)
+
+    # Summarise the direction of the effect honestly instead of assuming a win.
+    acc_deltas = [r['chan_acc'] - r['iso_acc'] for r in results]
+    n_pos = sum(1 for d in acc_deltas if d > 0.001)
+    n_neg = sum(1 for d in acc_deltas if d < -0.001)
+    n_flat = len(acc_deltas) - n_pos - n_neg
+    best = max(results, key=lambda r: r['chan_acc'] - r['iso_acc'])
+    best_delta = best['chan_acc'] - best['iso_acc']
+
     with open(report_path, 'w') as f:
         f.write("# Chained Risk Prediction Results (Isolated vs. Chained Performance Comparison)\n\n")
-        f.write("This report documents the performance improvement in Heart Disease and Hypertension prediction when incorporating upstream risk probabilities (Diabetes and CKD risks) as features.\n\n")
+        f.write("This report is an **ablation** on two independent comorbidity datasets (a stroke "
+                "cohort and a BRFSS metabolic-syndrome cohort). It measures what happens to Heart "
+                "Disease and Hypertension prediction when the upstream Diabetes and CKD risk "
+                "probabilities are added as features, versus an otherwise-identical isolated model. "
+                "It complements the deployed-model ablation in `baseline_metrics.md`.\n\n")
         f.write("## Experiment Results\n\n")
         f.write("| Experiment / Dataset | Isolated Accuracy | Chained Accuracy | Accuracy Delta | Isolated ROC AUC | Chained ROC AUC | ROC AUC Delta |\n")
         f.write("|---|---|---|---|---|---|---|\n")
@@ -190,8 +203,21 @@ def run_chaining_evaluation():
             f.write(f"| {res['experiment']} | {res['iso_acc']:.2%} | {res['chan_acc']:.2%} | **{acc_diff:+.2%}** | {res['iso_auc']:.4f} | {res['chan_auc']:.4f} | **{auc_diff:+.4f}** |\n")
             
         f.write("\n## Rationale & Key Takeaways\n\n")
-        f.write("1. **Upstream Cascading Risk**: The results prove that feeding diabetes and CKD risk scores as features into downstream heart and hypertension predictors improves model capability.\n")
-        f.write("2. **Metabolic Syndrome Overlap**: High blood glucose (diabetes) and impaired filtration (CKD) have strong pathological linkages to vascular strain and atherosclerotic progression, which the chained model captures explicitly.\n")
+        f.write(f"1. **The effect is small and dataset-dependent, not a blanket improvement.** Across "
+                f"the {len(results)} experiments, chaining helped in {n_pos}, was roughly neutral in "
+                f"{n_flat}, and slightly hurt in {n_neg}. The largest gain was **{best_delta:+.2%} "
+                f"accuracy** on \"{best['experiment']}\", where metabolic-syndrome comorbidity burden "
+                f"is highest; the other experiments moved by well under a percentage point in either "
+                f"direction. Chaining should be read as a *modest, targeted* prior for comorbid "
+                f"populations, not as a general accuracy win.\n")
+        f.write("2. **Metabolic Syndrome Overlap**: High blood glucose (diabetes) and impaired "
+                "filtration (CKD) are pathologically linked to vascular strain and atherosclerotic "
+                "progression, which is the plausible mechanism for any gain the chained model "
+                "captures. The near-zero deltas elsewhere show the signal is largely redundant once "
+                "the isolated features are present.\n")
+        f.write("\n> **Caveat:** upstream risks here are produced by models trained on *different* "
+                "datasets, with some inputs median-imputed for these cohorts, so the upstream feature "
+                "is a partial proxy — see the cross-dataset caveat in `reports/handoff_chaining_cri.md`.\n")
         
     print(f"\nChaining results saved to {report_path}")
 

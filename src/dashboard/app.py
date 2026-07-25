@@ -581,6 +581,14 @@ def _risk_props(pct: float):
         }
 
 def encode_inputs(age, sex, bmi, sbp, dbp, glucose, chol, smoking, alcohol, pa, fh):
+    # Lifestyle features are encoded as binary because every model was trained
+    # on binary smoke/alcohol/activity flags (0/1). Offering intermediate values
+    # (e.g. 0.5) would feed the tree a value it never saw at training time, so
+    # the UI itself is kept binary to avoid promising granularity the model
+    # cannot honour.
+    # family_history maps to representative DiabetesPedigreeFunction values
+    # (the continuous quantity the diabetes model was trained on): ~lower- and
+    # ~upper-quartile pedigree scores, so the input lands in-distribution.
     return {
         'age':               float(age),
         'sex':               1.0 if sex == "Male" else 0.0,
@@ -589,10 +597,10 @@ def encode_inputs(age, sex, bmi, sbp, dbp, glucose, chol, smoking, alcohol, pa, 
         'diastolic_bp':      float(dbp),
         'glucose':           float(glucose),
         'cholesterol':       float(chol),
-        'smoking':           {'Never': 0.0, 'Former': 0.5, 'Current': 1.0}[smoking],
-        'alcohol':           {'None': 0.0, 'Occasional': 0.5, 'Frequent': 1.0}[alcohol],
-        'physical_activity': {'Low': 0.0, 'Moderate': 0.5, 'High': 1.0}[pa],
-        'family_history':    1.0 if fh == "Yes" else 0.0,
+        'smoking':           {'Non-smoker': 0.0, 'Smoker': 1.0}[smoking],
+        'alcohol':           {'No': 0.0, 'Yes': 1.0}[alcohol],
+        'physical_activity': {'Inactive': 0.0, 'Active': 1.0}[pa],
+        'family_history':    0.6 if fh == "Yes" else 0.2,
     }
 
 def validate_inputs(age, bmi, sbp, dbp, glucose, chol):
@@ -799,9 +807,10 @@ with st.sidebar:
         cholesterol = st.number_input("Total Cholesterol", min_value=100, max_value=400, value=190)
 
         st.markdown('<div class="sb-section">Lifestyle & History</div>', unsafe_allow_html=True)
-        smoking  = st.selectbox("Smoking Status",        ["Never", "Former", "Current"])
-        alcohol  = st.selectbox("Alcohol Consumption",   ["None", "Occasional", "Frequent"])
-        phys_act = st.selectbox("Physical Activity",     ["Low", "Moderate", "High"])
+        # Binary to match the models' training features (see encode_inputs).
+        smoking  = st.selectbox("Smoking Status",        ["Non-smoker", "Smoker"])
+        alcohol  = st.selectbox("Regular Alcohol Use",   ["No", "Yes"])
+        phys_act = st.selectbox("Physically Active",     ["Active", "Inactive"])
         fam_hist = st.selectbox("Family History of Chronic Illness", ["No", "Yes"])
 
         st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
@@ -975,12 +984,13 @@ else:
             </div>
             """, unsafe_allow_html=True)
 
-            # Model accuracy annotations per disease
+            # Model accuracy annotations per disease (5-fold CV, checkup-safe;
+            # Heart & Hypertension are the shipped *chained* models).
             model_acc = {
-                "Diabetes":      ("76.4%", "0.825"),
-                "CKD":           ("79.0%", "0.892"),
-                "Heart Disease": ("88.6%", "0.963"),
-                "Hypertension":  ("73.6%", "0.803"),
+                "Diabetes":      ("75.9%", "0.830"),
+                "CKD":           ("79.3%", "0.892"),
+                "Heart Disease": ("90.2%", "0.974"),
+                "Hypertension":  ("73.7%", "0.802"),
             }
             ckd_footnote = True
 
@@ -1093,11 +1103,11 @@ else:
                 # ── Metrics table ──
                 metrics_df = pd.DataFrame({
                     "Model":      ["Diabetes", "CKD", "Heart Disease", "Hypertension"],
-                    "Accuracy":   ["76.4%", "79.0%", "88.6%", "73.6%"],
-                    "ROC AUC":    ["0.825", "0.892", "0.963", "0.803"],
-                    "F1-Score":   ["0.683", "0.824", "0.886", "0.725"],
+                    "Accuracy":   ["75.9%", "79.3%", "90.2%", "73.7%"],
+                    "ROC AUC":    ["0.830", "0.892", "0.974", "0.802"],
+                    "F1-Score":   ["0.676", "0.826", "0.902", "0.725"],
                     "Dataset Size":["768", "400", "1,025", "70,000"],
-                    "Feature Set":["Checkup-safe", "⚠ Reduced (lab tests removed)", "Checkup-safe", "Checkup-safe"],
+                    "Feature Set":["Checkup-safe", "⚠ Reduced (lab tests removed)", "Chained checkup-safe", "Chained checkup-safe"],
                 })
                 st.dataframe(metrics_df, use_container_width=True, hide_index=True)
 
@@ -1107,7 +1117,7 @@ else:
                 st.markdown("""
                 <div class="sec-head" style="margin-bottom:12px">
                   <div class="sec-head-title">Validation Curves — Held-out 20% Test Split</div>
-                  <div class="sec-head-sub">Model discrimination (ROC) and reliability (Calibration)</div>
+                  <div class="sec-head-sub">A fresh model with the shipped configuration is trained on the 80% train split and scored on the untouched 20% test split (no leakage). Discrimination (ROC) and reliability (Calibration).</div>
                 </div>
                 """, unsafe_allow_html=True)
                 
@@ -1128,18 +1138,19 @@ else:
                 st.markdown("""
                 <div class="sec-head" style="margin-bottom:12px">
                   <div class="sec-head-title">Chained vs. Isolated Prediction Comparison</div>
-                  <div class="sec-head-sub">Does feeding upstream Diabetes + CKD risk improve downstream predictions?</div>
+                  <div class="sec-head-sub">Ablation on the shipped models: does adding upstream Diabetes + CKD risk as features change 5-fold CV performance? (Heart & HTN are the models actually deployed here.)</div>
                 </div>
                 """, unsafe_allow_html=True)
 
+                # Deployed-model ablation (5-fold CV, from reports/model_metrics.json).
                 chaining_df = pd.DataFrame({
-                    "Dataset":            ["Heart+HTN Dataset", "Heart+HTN Dataset", "BRFSS Dataset", "BRFSS Dataset"],
-                    "Predicts":           ["Heart Disease", "Hypertension", "Heart Disease", "Hypertension"],
-                    "Isolated Acc":       ["88.67%", "86.05%", "81.27%", "70.36%"],
-                    "Chained Acc":        ["88.75%", "85.85%", "82.67%", "70.36%"],
-                    "Δ Accuracy":         ["+0.08%", "-0.20%", "+1.40% ✓", "~0.00%"],
-                    "Isolated AUC":       ["0.831", "0.770", "0.780", "0.778"],
-                    "Chained AUC":        ["0.835", "0.768", "0.781", "0.778"],
+                    "Deployed Model":     ["Heart Disease", "Hypertension"],
+                    "Dataset":            ["heart_clean (n=1,025)", "hypertension_clean (n=70,000)"],
+                    "Isolated Acc":       ["89.37%", "73.56%"],
+                    "Chained Acc":        ["90.24%", "73.69%"],
+                    "Δ Accuracy":         ["+0.87% ✓", "+0.13%"],
+                    "Isolated AUC":       ["0.964", "0.802"],
+                    "Chained AUC":        ["0.974", "0.802"],
                 })
                 st.dataframe(chaining_df, use_container_width=True, hide_index=True)
 
@@ -1147,9 +1158,13 @@ else:
                 <div class="insight-card" style="margin-top:14px">
                   <p>
                     <strong style="color:var(--teal-600)">Key Finding —</strong>
-                    Chaining improves most on the BRFSS dataset (+1.40% accuracy), where metabolic syndrome
-                    comorbidity burden is highest. This supports the hypothesis that upstream Diabetes and CKD
-                    risk adds signal specifically for patients with multiple concurrent risk factors.
+                    The chaining benefit is real but small and uneven. On the deployed Heart model it adds
+                    <strong>+0.87% accuracy / +0.010 AUC</strong>; on Hypertension it is essentially neutral
+                    (upstream signal is already captured by the richer vitals). A wider ablation on two
+                    independent comorbidity cohorts (see <code>reports/chaining_results.md</code>) shows the
+                    same pattern — a modest gain concentrated in high-comorbidity populations (up to +1.49% on
+                    BRFSS), and near-zero or slightly negative elsewhere. Chaining is a targeted prior, not a
+                    blanket accuracy win.
                   </p>
                 </div>
 
@@ -1176,8 +1191,15 @@ else:
                   <div style="font-size:0.82rem;color:#991B1B;line-height:1.7">
                     This is a <strong>screening tool, not a diagnostic instrument.</strong>
                     Results must be reviewed by a qualified clinician before any clinical decision.
-                    Dataset biases: PIMA Indians dataset skews female South Asian; BRFSS is self-reported.
-                    CKD model uses reduced features — full lab panel needed for clinical CKD diagnosis.
+                    <strong>Diabetes model:</strong> trained on the Pima Indians cohort, which is
+                    <strong>female-only</strong> (age 21+); scores for male patients are an
+                    extrapolation outside the validated population.
+                    <strong>Chaining:</strong> the upstream Diabetes/CKD risk features fed to the Heart
+                    and Hypertension models were, at training time, computed on datasets missing some
+                    inputs (median-imputed), so those features carry less signal in training than at
+                    live inference — a cross-dataset limitation, not a validated end-to-end pipeline.
+                    <strong>CKD model:</strong> reduced features — a full lab panel is needed for
+                    clinical CKD diagnosis. BRFSS data is self-reported.
                   </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -1202,8 +1224,8 @@ else:
                 sim_bmi = sim_weight / ((height / 100) ** 2)
                 sim_glucose = st.slider("Blood Sugar", 70, 300, int(glucose), 5, key="sim_glucose")
                 sim_sbp = st.slider("Upper Blood Pressure", 90, 200, int(systolic_bp), 2, key="sim_sbp")
-                sim_pa = st.select_slider("Physical Activity", options=["Low", "Moderate", "High"], value=phys_act, key="sim_pa")
-                sim_smoking = st.selectbox("Smoking", ["Never", "Former", "Current"], index=["Never", "Former", "Current"].index(smoking), key="sim_smoking")
+                sim_pa = st.select_slider("Physically Active", options=["Active", "Inactive"], value=phys_act, key="sim_pa")
+                sim_smoking = st.selectbox("Smoking", ["Non-smoker", "Smoker"], index=["Non-smoker", "Smoker"].index(smoking), key="sim_smoking")
                 
             with sim_col2:
                 # Re-run prediction with simulated inputs

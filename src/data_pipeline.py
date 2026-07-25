@@ -271,27 +271,30 @@ def clean_hypertension(path: str) -> pd.DataFrame:
     return df_clean
 
 if __name__ == "__main__":
-    # Create processed directory if it doesn't exist
-    processed_dir = r"c:\Users\Sayli\OneDrive\Desktop\Aarogyadrishti-AI\data\processed"
+    # Resolve paths relative to the repository root so the pipeline runs
+    # anywhere, not just on the original author's machine.
+    PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    raw_dir = os.path.join(PROJECT_ROOT, "data", "raw")
+    processed_dir = os.path.join(PROJECT_ROOT, "data", "processed")
     os.makedirs(processed_dir, exist_ok=True)
-    
+
     print("Cleaning diabetes dataset...")
-    df_dia = clean_diabetes(r"c:\Users\Sayli\OneDrive\Desktop\Aarogyadrishti-AI\data\raw\diabetes.csv")
+    df_dia = clean_diabetes(os.path.join(raw_dir, "diabetes.csv"))
     df_dia.to_csv(os.path.join(processed_dir, "diabetes_clean.csv"), index=False)
     print(f"Saved cleaned diabetes dataset to processed/diabetes_clean.csv (Shape: {df_dia.shape})")
-    
+
     print("\nCleaning CKD dataset...")
-    df_ckd = clean_ckd(r"c:\Users\Sayli\OneDrive\Desktop\Aarogyadrishti-AI\data\raw\kidney_disease.csv")
+    df_ckd = clean_ckd(os.path.join(raw_dir, "kidney_disease.csv"))
     df_ckd.to_csv(os.path.join(processed_dir, "ckd_clean.csv"), index=False)
     print(f"Saved cleaned CKD dataset to processed/ckd_clean.csv (Shape: {df_ckd.shape})")
 
     print("\nCleaning Heart disease dataset...")
-    df_heart = clean_heart(r"c:\Users\Sayli\OneDrive\Desktop\Aarogyadrishti-AI\data\raw\heart.csv")
+    df_heart = clean_heart(os.path.join(raw_dir, "heart.csv"))
     df_heart.to_csv(os.path.join(processed_dir, "heart_clean.csv"), index=False)
     print(f"Saved cleaned heart dataset to processed/heart_clean.csv (Shape: {df_heart.shape})")
 
     print("\nCleaning Hypertension dataset...")
-    df_ht = clean_hypertension(r"c:\Users\Sayli\OneDrive\Desktop\Aarogyadrishti-AI\data\raw\hypertension.csv")
+    df_ht = clean_hypertension(os.path.join(raw_dir, "hypertension.csv"))
     df_ht.to_csv(os.path.join(processed_dir, "hypertension_clean.csv"), index=False)
     print(f"Saved cleaned hypertension dataset to processed/hypertension_clean.csv (Shape: {df_ht.shape})")
 

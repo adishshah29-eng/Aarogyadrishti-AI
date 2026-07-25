@@ -1,3 +1,13 @@
+"""
+Diabetes risk model (upstream).
+
+Training cohort: the Pima Indians Diabetes dataset, which contains **female
+patients only** (age 21+). Because every row has ``sex = 0.0``, that column
+carries zero variance and cannot contribute to the model, so it is
+deliberately excluded from the feature set. Applying this model to male
+patients is an extrapolation outside its validated population; the dashboard
+surfaces this caveat to the user.
+"""
 import os
 import pandas as pd
 import numpy as np
@@ -7,16 +17,23 @@ from imblearn.over_sampling import SMOTE
 from sklearn.model_selection import KFold
 from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, confusion_matrix
 
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+DATA_PROCESSED = os.path.join(PROJECT_ROOT, "data", "processed")
+MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
+
 def train_and_evaluate():
     # Load processed data
-    data_path = r"c:\Users\Sayli\OneDrive\Desktop\Aarogyadrishti-AI\data\processed\diabetes_clean.csv"
+    data_path = os.path.join(DATA_PROCESSED, "diabetes_clean.csv")
     if not os.path.exists(data_path):
         raise FileNotFoundError(f"Cleaned diabetes data not found at {data_path}")
     df = pd.read_csv(data_path)
-    
+
     # Define features
+    # 'sex' is intentionally omitted: the Pima cohort is female-only, so the
+    # column is constant (zero variance) and only invites out-of-distribution
+    # use on male patients.
     baseline_features = ['Pregnancies', 'glucose', 'diastolic_bp', 'SkinThickness', 'Insulin', 'bmi', 'family_history', 'age']
-    checkup_safe_features = ['age', 'sex', 'bmi', 'diastolic_bp', 'glucose', 'family_history']
+    checkup_safe_features = ['age', 'bmi', 'diastolic_bp', 'glucose', 'family_history']
     target_col = 'Outcome'
     
     X_base = df[baseline_features]
@@ -124,9 +141,8 @@ def train_and_evaluate():
     final_base_model.fit(X_base_res, y_res_b)
     
     # Save the final checkup-safe model along with metadata
-    models_dir = r"c:\Users\Sayli\OneDrive\Desktop\Aarogyadrishti-AI\models"
-    os.makedirs(models_dir, exist_ok=True)
-    model_path = os.path.join(models_dir, "diabetes_model.pkl")
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    model_path = os.path.join(MODELS_DIR, "diabetes_model.pkl")
     
     model_data = {
         'model': final_model,

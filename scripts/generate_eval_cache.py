@@ -1,50 +1,51 @@
 """
-Generates ROC curve data and calibration curve data for all 4 models.
-Uses the saved checkup-safe models against a held-out 20% test split (stratified).
-Writes results to models/eval_cache.pkl so the dashboard can load them instantly.
+Generate ROC and calibration curve data for all 4 models on a genuinely
+held-out test split, and cache it to models/eval_cache.pkl for the dashboard.
+
+Why retrain here?
+    The shipped .pkl models are deliberately trained on 100% of their data
+    (final_model.fit(...) in each model's train_and_evaluate). Evaluating that
+    same model on a "held-out" slice of its own training data leaks — the model
+    has already seen every one of those rows. To report an honest held-out
+    curve we instead train a FRESH model with the identical configuration on the
+    80% train split and score the untouched 20% test split. The curves therefore
+    describe the generalization of the shipped *recipe*, not an in-sample fit.
+
+For the downstream (chained) models, the upstream Diabetes/CKD risk features are
+regenerated with src.models.upstream.add_upstream_risks so the evaluated feature
+set matches what the model actually ships with.
 """
-import os, sys
+import os
+import sys
 import numpy as np
 import pandas as pd
 import joblib
+from xgboost import XGBClassifier
+from imblearn.over_sampling import SMOTE
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_curve, auc
 from sklearn.calibration import calibration_curve
 
-# Add project root
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, ROOT)
+
+from src.models.upstream import add_upstream_risks, UPSTREAM_FEATURES
 
 DATA = os.path.join(ROOT, "data", "processed")
 MODELS = os.path.join(ROOT, "models")
 OUT = os.path.join(MODELS, "eval_cache.pkl")
 
-# ── Feature schemas (must match what each model was trained on) ──
+BASE_PARAMS = {
+    "n_estimators": 100, "max_depth": 4, "learning_rate": 0.1,
+    "random_state": 42, "eval_metric": "logloss",
+}
+HYPERTENSION_PARAMS = {**BASE_PARAMS, "subsample": 0.8, "colsample_bytree": 0.8}
+
 SCHEMAS = {
-    "Diabetes": {
-        "csv":    "diabetes_clean.csv",
-        "pkl":    "diabetes_model.pkl",
-        "target": "Outcome",
-        "feats":  None,   # loaded from pkl
-    },
-    "CKD": {
-        "csv":    "ckd_clean.csv",
-        "pkl":    "ckd_model.pkl",
-        "target": "classification",
-        "feats":  None,
-    },
-    "Heart Disease": {
-        "csv":    "heart_clean.csv",
-        "pkl":    "heart_model.pkl",
-        "target": "target",
-        "feats":  None,
-    },
-    "Hypertension": {
-        "csv":    "hypertension_clean.csv",
-        "pkl":    "hypertension_model.pkl",
-        "target": "cardio",
-        "feats":  None,
-    },
+    "Diabetes":      {"csv": "diabetes_clean.csv",     "pkl": "diabetes_model.pkl",     "target": "Outcome",        "params": BASE_PARAMS},
+    "CKD":           {"csv": "ckd_clean.csv",          "pkl": "ckd_model.pkl",          "target": "classification", "params": BASE_PARAMS},
+    "Heart Disease": {"csv": "heart_clean.csv",        "pkl": "heart_model.pkl",        "target": "target",         "params": BASE_PARAMS},
+    "Hypertension":  {"csv": "hypertension_clean.csv", "pkl": "hypertension_model.pkl", "target": "cardio",         "params": HYPERTENSION_PARAMS},
 }
 
 cache = {}
@@ -52,55 +53,52 @@ cache = {}
 for name, cfg in SCHEMAS.items():
     print(f"\n── {name} ──")
     df = pd.read_csv(os.path.join(DATA, cfg["csv"]))
-    model_data = joblib.load(os.path.join(MODELS, cfg["pkl"]))
-    model  = model_data["model"]
-    feats  = model_data["features"]
+    feats = joblib.load(os.path.join(MODELS, cfg["pkl"]))["features"]
     target = cfg["target"]
 
-    # Find target column (case-insensitive fallback)
+    # Downstream models chain on upstream risk scores that are not columns of
+    # the raw processed CSV — regenerate them so the feature set matches ship.
+    if any(f in UPSTREAM_FEATURES for f in feats) and not set(UPSTREAM_FEATURES).issubset(df.columns):
+        df = add_upstream_risks(df)
+
     if target not in df.columns:
         candidates = [c for c in df.columns if c.lower() == target.lower()]
         if not candidates:
-            print(f"  WARNING: target '{target}' not found. Available: {list(df.columns[:10])}")
+            print(f"  WARNING: target '{target}' not found; skipping.")
             continue
         target = candidates[0]
 
-    # Keep only rows with all needed columns
-    needed = feats + [target]
-    df = df[[c for c in needed if c in df.columns]].dropna()
-
-    # Align missing feature columns
-    for f in feats:
-        if f not in df.columns:
-            df[f] = df[feats].median()[feats.index(f)] if f in feats else 0
-
+    df = df[[c for c in feats + [target] if c in df.columns]].dropna()
     X = df[feats]
     y = df[target].astype(int)
 
-    # Stratified 80/20 split
+    # Genuine held-out split: the model below never sees X_test / y_test.
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, stratify=y, random_state=42
     )
 
+    # Train a fresh model with the shipped configuration on the train split only.
+    smote = SMOTE(random_state=42)
+    X_res, y_res = smote.fit_resample(X_train, y_train)
+    model = XGBClassifier(**cfg["params"])
+    model.fit(X_res, y_res)
+
     probs = model.predict_proba(X_test)[:, 1]
 
-    # ROC
     fpr, tpr, _ = roc_curve(y_test, probs)
     roc_auc = auc(fpr, tpr)
-    print(f"  ROC AUC = {roc_auc:.4f}")
+    print(f"  Held-out ROC AUC = {roc_auc:.4f}  (n_test={len(y_test)})")
 
-    # Calibration (fraction of positives vs mean predicted prob)
-    n_bins = 10
-    prob_true, prob_pred = calibration_curve(y_test, probs, n_bins=n_bins, strategy="uniform")
+    prob_true, prob_pred = calibration_curve(y_test, probs, n_bins=10, strategy="uniform")
 
     cache[name] = {
-        "fpr":       fpr.tolist(),
-        "tpr":       tpr.tolist(),
-        "roc_auc":   roc_auc,
+        "fpr": fpr.tolist(),
+        "tpr": tpr.tolist(),
+        "roc_auc": float(roc_auc),
         "prob_true": prob_true.tolist(),
         "prob_pred": prob_pred.tolist(),
-        "n_test":    len(y_test),
-        "pos_rate":  float(y_test.mean()),
+        "n_test": int(len(y_test)),
+        "pos_rate": float(y_test.mean()),
     }
 
 joblib.dump(cache, OUT)

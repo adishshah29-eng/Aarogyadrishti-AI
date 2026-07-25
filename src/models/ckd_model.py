@@ -7,9 +7,13 @@ from imblearn.over_sampling import SMOTE
 from sklearn.model_selection import KFold
 from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, confusion_matrix
 
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+DATA_PROCESSED = os.path.join(PROJECT_ROOT, "data", "processed")
+MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
+
 def train_and_evaluate():
     # Load processed data
-    data_path = r"c:\Users\Sayli\OneDrive\Desktop\Aarogyadrishti-AI\data\processed\ckd_clean.csv"
+    data_path = os.path.join(DATA_PROCESSED, "ckd_clean.csv")
     if not os.path.exists(data_path):
         raise FileNotFoundError(f"Cleaned CKD data not found at {data_path}")
     df = pd.read_csv(data_path)
@@ -122,9 +126,8 @@ def train_and_evaluate():
     final_model.fit(X_safe_res, y_res)
     
     # Save the final checkup-safe model along with metadata
-    models_dir = r"c:\Users\Sayli\OneDrive\Desktop\Aarogyadrishti-AI\models"
-    os.makedirs(models_dir, exist_ok=True)
-    model_path = os.path.join(models_dir, "ckd_model.pkl")
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    model_path = os.path.join(MODELS_DIR, "ckd_model.pkl")
     
     model_data = {
         'model': final_model,
