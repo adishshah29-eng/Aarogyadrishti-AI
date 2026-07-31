@@ -6,8 +6,8 @@ This document provides function signatures, expected input shapes, and code exam
 
 ## 1. Exported Python Modules
 The prediction functions are defined in:
-* **Diabetes**: [src/models/diabetes_model.py](file:///c:/Users/Sayli/OneDrive/Desktop/Aarogyadrishti-AI/src/models/diabetes_model.py)
-* **CKD**: [src/models/ckd_model.py](file:///c:/Users/Sayli/OneDrive/Desktop/Aarogyadrishti-AI/src/models/ckd_model.py)
+* **Diabetes**: `src/models/diabetes_model.py`
+* **CKD**: `src/models/ckd_model.py`
 
 The saved models are located in `models/diabetes_model.pkl` and `models/ckd_model.pkl`.
 
@@ -44,7 +44,7 @@ Input dataframes or dicts should conform to the **canonical feature schema** (ot
 The full canonical schema columns are:
 * `patient_id` (string)
 * `age` (float, years)
-* `sex` (float, `1.0` = Male, `0.0` = Female)
+* `sex` (float, `1.0` = Male, `0.0` = Female) — *the diabetes model now uses this feature (trained on the 100k mixed-sex dataset).*
 * `bmi` (float, kg/m²)
 * `systolic_bp` (float, mmHg)
 * `diastolic_bp` (float, mmHg)
@@ -111,5 +111,5 @@ print(ckd_results)
 
 ## 5. Robustness & Imputation Guard
 If the input data contains missing values (`NaN`) or if some columns are omitted entirely, the prediction wrappers will automatically impute them with the training medians under the hood:
-* **Diabetes Medians used**: `{'age': 33.0, 'sex': 0.0, 'bmi': 32.0, 'diastolic_bp': 72.0, 'glucose': 117.0, 'family_history': 0.3725}`
+* **Diabetes Medians used** (checkup-safe features `age, sex, bmi, glucose, smoking`): `{'age': 49.0, 'sex': 0.0, 'bmi': 27.32, 'glucose': 140.0, 'smoking': 0.0}`
 * **CKD Medians used**: `{'age': 55.0, 'diastolic_bp': 80.0, 'glucose': 121.0}`

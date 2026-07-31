@@ -1,0 +1,120 @@
+{
+  "diabetes": {
+    "baseline": {
+      "accuracy": 0.9647,
+      "auc": 0.9723,
+      "f1": 0.8031,
+      "confusion": [
+        70907,
+        137,
+        2671,
+        5729
+      ]
+    },
+    "checkup_safe": {
+      "accuracy": 0.888,
+      "auc": 0.913,
+      "f1": 0.5534,
+      "confusion": [
+        65035,
+        6009,
+        2886,
+        5514
+      ]
+    }
+  },
+  "ckd": {
+    "baseline": {
+      "accuracy": 0.9775,
+      "auc": 0.998,
+      "f1": 0.9814,
+      "confusion": [
+        145,
+        5,
+        4,
+        246
+      ]
+    },
+    "checkup_safe": {
+      "accuracy": 0.7925,
+      "auc": 0.8921,
+      "f1": 0.8259,
+      "confusion": [
+        118,
+        32,
+        51,
+        199
+      ]
+    }
+  },
+  "heart": {
+    "baseline": {
+      "accuracy": 0.9951,
+      "auc": 0.9974,
+      "f1": 0.9952,
+      "confusion": [
+        497,
+        2,
+        3,
+        523
+      ]
+    },
+    "isolated": {
+      "accuracy": 0.8937,
+      "auc": 0.9639,
+      "f1": 0.8938,
+      "confusion": [
+        455,
+        44,
+        65,
+        461
+      ]
+    },
+    "chained": {
+      "accuracy": 0.8976,
+      "auc": 0.9682,
+      "f1": 0.8977,
+      "confusion": [
+        455,
+        44,
+        61,
+        465
+      ]
+    }
+  },
+  "hypertension": {
+    "baseline": {
+      "accuracy": 0.736,
+      "auc": 0.8029,
+      "f1": 0.7247,
+      "confusion": [
+        27206,
+        7815,
+        10662,
+        24317
+      ]
+    },
+    "isolated": {
+      "accuracy": 0.7361,
+      "auc": 0.8024,
+      "f1": 0.725,
+      "confusion": [
+        27179,
+        7842,
+        10631,
+        24348
+      ]
+    },
+    "chained": {
+      "accuracy": 0.7371,
+      "auc": 0.8028,
+      "f1": 0.7254,
+      "confusion": [
+        27276,
+        7745,
+        10661,
+        24318
+      ]
+    }
+  }
+}

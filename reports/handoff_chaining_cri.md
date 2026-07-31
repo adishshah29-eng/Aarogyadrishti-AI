@@ -6,15 +6,17 @@ This document provides detailed integration guidelines and code snippets for usi
 
 ## 1. Exported Python Modules
 The CRI calculations and full patient risk profiling interfaces are defined in:
-* **CRI and Patient Profile**: [src/chaining/cri.py](file:///c:/Users/Sayli/OneDrive/Desktop/Aarogyadrishti-AI/src/chaining/cri.py)
-* **Chaining Engine Evaluation**: [src/chaining/chain_engine.py](file:///c:/Users/Sayli/OneDrive/Desktop/Aarogyadrishti-AI/src/chaining/chain_engine.py)
+* **CRI and Patient Profile**: `src/chaining/cri.py`
+* **Chaining Engine Evaluation**: `src/chaining/chain_engine.py`
 
 ---
 
 ## 2. Risk Profiling Signatures
 
 ### Single Patient Full Risk Profile
-This function calculates the risk scores for all four diseases (Diabetes, CKD, Hypertension, and Heart Disease) along with the Comorbidity Risk Index (CRI). It automatically chains predictions under the hood (upstream predictions feed downstream models).
+This function calculates the risk scores for all four diseases (Diabetes, CKD, Hypertension, and Heart Disease) along with the Comorbidity Risk Index (CRI). It chains predictions under the hood: the Diabetes and CKD risks are predicted first, appended to the patient frame as `diabetes_risk` and `ckd_risk`, and then genuinely consumed as **input features** by the downstream Heart Disease and Hypertension models (whose shipped feature lists include those two columns). The CRI is then computed as a weighted synthesis with clinical interaction terms on top of the four scores.
+
+> **Cross-dataset caveat.** The downstream models were *trained* on their own single-disease datasets, which do not carry every input the upstream models need — so the `diabetes_risk`/`ckd_risk` values seen during downstream training were partly median-imputed and therefore weaker than the values produced at live inference (where the full checkup panel is available). The chaining is genuinely wired end-to-end, but this train/inference distribution shift means the measured chaining gains (see `reports/baseline_metrics.md` and `reports/chaining_results.md`) are modest and should not be over-interpreted.
 
 ```python
 def get_full_risk_profile(patient_df) -> dict:

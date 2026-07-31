@@ -1,3 +1,17 @@
+"""
+Diabetes risk model (upstream).
+
+Training cohort: the 100k-row Diabetes Prediction dataset (Kaggle: iammustafatz,
+CC0), which contains **both sexes** (~48k female / ~31k male adults after
+cleaning). This replaces the legacy female-only Pima dataset, so ``sex`` is now
+a genuine, non-degenerate feature and the model is validated across both sexes.
+
+Checkup-safe feature set: age, sex, bmi, glucose, smoking. The dataset's
+HbA1c_level (a diagnostic marker) and the hypertension/heart_disease labels are
+kept only for the full-feature baseline — HbA1c would trivialise the task, and
+using the comorbidity labels as inputs would make the upstream->downstream chain
+circular.
+"""
 import os
 import pandas as pd
 import numpy as np
@@ -7,16 +21,22 @@ from imblearn.over_sampling import SMOTE
 from sklearn.model_selection import KFold
 from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, confusion_matrix
 
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+DATA_PROCESSED = os.path.join(PROJECT_ROOT, "data", "processed")
+MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
+
 def train_and_evaluate():
     # Load processed data
-    data_path = r"c:\Users\Sayli\OneDrive\Desktop\Aarogyadrishti-AI\data\processed\diabetes_clean.csv"
+    data_path = os.path.join(DATA_PROCESSED, "diabetes_clean.csv")
     if not os.path.exists(data_path):
         raise FileNotFoundError(f"Cleaned diabetes data not found at {data_path}")
     df = pd.read_csv(data_path)
-    
-    # Define features
-    baseline_features = ['Pregnancies', 'glucose', 'diastolic_bp', 'SkinThickness', 'Insulin', 'bmi', 'family_history', 'age']
-    checkup_safe_features = ['age', 'sex', 'bmi', 'diastolic_bp', 'glucose', 'family_history']
+
+    # Define features. 'sex' is a real feature again now that the training data
+    # spans both sexes. The baseline adds the diagnostic/comorbidity columns for
+    # comparison only; the shipped checkup-safe set stays non-invasive.
+    baseline_features = ['age', 'sex', 'bmi', 'glucose', 'smoking', 'HbA1c_level', 'hypertension', 'heart_disease']
+    checkup_safe_features = ['age', 'sex', 'bmi', 'glucose', 'smoking']
     target_col = 'Outcome'
     
     X_base = df[baseline_features]
@@ -124,9 +144,8 @@ def train_and_evaluate():
     final_base_model.fit(X_base_res, y_res_b)
     
     # Save the final checkup-safe model along with metadata
-    models_dir = r"c:\Users\Sayli\OneDrive\Desktop\Aarogyadrishti-AI\models"
-    os.makedirs(models_dir, exist_ok=True)
-    model_path = os.path.join(models_dir, "diabetes_model.pkl")
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    model_path = os.path.join(MODELS_DIR, "diabetes_model.pkl")
     
     model_data = {
         'model': final_model,

@@ -4,7 +4,74 @@ import numpy as np
 
 def clean_diabetes(path: str) -> pd.DataFrame:
     """
-    Clean the Diabetes (Pima) dataset.
+    Clean the 100k mixed-sex Diabetes Prediction dataset (Kaggle: iammustafatz,
+    CC0). Columns: gender, age, hypertension, heart_disease, smoking_history,
+    bmi, HbA1c_level, blood_glucose_level, diabetes.
+
+    This replaces the female-only Pima dataset as the diabetes training source
+    so the model is validated across both sexes. Steps:
+    - Drop exact duplicate rows and restrict to adults (age >= 18) to match a
+      screening context.
+    - Map gender -> sex (Male=1.0, Female=0.0); drop the handful of 'Other' rows.
+    - Map columns onto the canonical schema; clip implausible BMI.
+    - Binarize smoking_history into a current/active-smoking flag.
+    - Keep HbA1c_level, hypertension, heart_disease as extra columns for the
+      full-feature baseline only (NOT used by the shipped checkup-safe model:
+      HbA1c is a diagnostic marker, and the two comorbidity labels would create
+      circularity in the upstream->downstream chain).
+    """
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Raw diabetes file not found at {path}")
+
+    df = pd.read_csv(path)
+    df = df.drop_duplicates()
+    df = df[df['age'] >= 18].copy()
+
+    # Map gender -> sex; 'Other' (a few rows) has no clear encoding, so drop it.
+    df['sex_mapped'] = df['gender'].map({'Male': 1.0, 'Female': 0.0})
+    df = df[df['sex_mapped'].notna()].copy()
+    # Reset the (now gappy) index so Series assignments below align positionally
+    # into the fresh df_clean rather than by mismatched index labels.
+    df = df.reset_index(drop=True)
+
+    # Binarize smoking history into an active/ever-smoking risk flag.
+    # 'No Info' is unknown -> treated as non-smoker (the majority class).
+    smoke_map = {
+        'never': 0.0, 'No Info': 0.0, 'not current': 0.0,
+        'former': 1.0, 'current': 1.0, 'ever': 1.0,
+    }
+    smoking = df['smoking_history'].map(smoke_map).fillna(0.0)
+
+    df_clean = pd.DataFrame()
+    df_clean['patient_id'] = [f"dpd_{i}" for i in range(len(df))]
+    df_clean['age'] = df['age'].astype(float)
+    df_clean['sex'] = df['sex_mapped'].astype(float)
+    df_clean['bmi'] = df['bmi'].astype(float).clip(13.0, 60.0)
+    df_clean['systolic_bp'] = np.nan
+    df_clean['diastolic_bp'] = np.nan
+    df_clean['glucose'] = df['blood_glucose_level'].astype(float)
+    df_clean['cholesterol'] = np.nan
+    df_clean['smoking'] = smoking.astype(float)
+    df_clean['alcohol'] = np.nan
+    df_clean['physical_activity'] = np.nan
+    df_clean['family_history'] = np.nan  # not available in this dataset
+
+    # Extra features retained for the full-feature baseline model only.
+    df_clean['HbA1c_level'] = df['HbA1c_level'].astype(float)
+    df_clean['hypertension'] = df['hypertension'].astype(float)
+    df_clean['heart_disease'] = df['heart_disease'].astype(float)
+
+    # Target (kept as 'Outcome' for interface compatibility)
+    df_clean['Outcome'] = df['diabetes'].astype(int)
+
+    return df_clean.reset_index(drop=True)
+
+
+def clean_diabetes_pima(path: str) -> pd.DataFrame:
+    """
+    Clean the legacy Diabetes (Pima Indians) dataset. Retained for provenance;
+    the shipped diabetes model now trains on the 100k mixed-sex dataset via
+    clean_diabetes(). The Pima cohort is female-only.
     - Treat invalid 0s in Glucose, BloodPressure, SkinThickness, Insulin, BMI as NaN.
     - Map columns to the canonical schema.
     - Perform median imputation.
@@ -253,9 +320,18 @@ def clean_hypertension(path: str) -> pd.DataFrame:
     df_clean['systolic_bp'] = df['ap_hi'].astype(float)
     df_clean['diastolic_bp'] = df['ap_lo'].astype(float)
     
-    df_clean['cholesterol'] = df['cholesterol'].astype(float)
-    df_clean['glucose'] = df['gluc'].astype(float)
-    
+    # The cardio dataset codes cholesterol/glucose as ordinal categories
+    # (1 = normal, 2 = above normal, 3 = well above normal). Every other dataset
+    # — and the dashboard — uses clinical mg/dL. Map the categories to
+    # representative mg/dL midpoints so the canonical schema is unit-consistent
+    # across all models (see src/schema.py). Without this the hypertension model
+    # would be trained on 1-3 while receiving 100-400 at inference, saturating
+    # the trees and making cholesterol inert.
+    chol_to_mgdl = {1.0: 180.0, 2.0: 220.0, 3.0: 270.0}   # normal / borderline-high / high
+    gluc_to_mgdl = {1.0: 90.0, 2.0: 115.0, 3.0: 160.0}    # normal / impaired / diabetic-range
+    df_clean['cholesterol'] = df['cholesterol'].astype(float).map(chol_to_mgdl)
+    df_clean['glucose'] = df['gluc'].astype(float).map(gluc_to_mgdl)
+
     df_clean['smoking'] = df['smoke'].astype(float)
     df_clean['alcohol'] = df['alco'].astype(float)
     df_clean['physical_activity'] = df['active'].astype(float)
@@ -271,27 +347,30 @@ def clean_hypertension(path: str) -> pd.DataFrame:
     return df_clean
 
 if __name__ == "__main__":
-    # Create processed directory if it doesn't exist
-    processed_dir = r"c:\Users\Sayli\OneDrive\Desktop\Aarogyadrishti-AI\data\processed"
+    # Resolve paths relative to the repository root so the pipeline runs
+    # anywhere, not just on the original author's machine.
+    PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    raw_dir = os.path.join(PROJECT_ROOT, "data", "raw")
+    processed_dir = os.path.join(PROJECT_ROOT, "data", "processed")
     os.makedirs(processed_dir, exist_ok=True)
-    
-    print("Cleaning diabetes dataset...")
-    df_dia = clean_diabetes(r"c:\Users\Sayli\OneDrive\Desktop\Aarogyadrishti-AI\data\raw\diabetes.csv")
+
+    print("Cleaning diabetes dataset (100k mixed-sex)...")
+    df_dia = clean_diabetes(os.path.join(raw_dir, "diabetes_100k.csv"))
     df_dia.to_csv(os.path.join(processed_dir, "diabetes_clean.csv"), index=False)
     print(f"Saved cleaned diabetes dataset to processed/diabetes_clean.csv (Shape: {df_dia.shape})")
-    
+
     print("\nCleaning CKD dataset...")
-    df_ckd = clean_ckd(r"c:\Users\Sayli\OneDrive\Desktop\Aarogyadrishti-AI\data\raw\kidney_disease.csv")
+    df_ckd = clean_ckd(os.path.join(raw_dir, "kidney_disease.csv"))
     df_ckd.to_csv(os.path.join(processed_dir, "ckd_clean.csv"), index=False)
     print(f"Saved cleaned CKD dataset to processed/ckd_clean.csv (Shape: {df_ckd.shape})")
 
     print("\nCleaning Heart disease dataset...")
-    df_heart = clean_heart(r"c:\Users\Sayli\OneDrive\Desktop\Aarogyadrishti-AI\data\raw\heart.csv")
+    df_heart = clean_heart(os.path.join(raw_dir, "heart.csv"))
     df_heart.to_csv(os.path.join(processed_dir, "heart_clean.csv"), index=False)
     print(f"Saved cleaned heart dataset to processed/heart_clean.csv (Shape: {df_heart.shape})")
 
     print("\nCleaning Hypertension dataset...")
-    df_ht = clean_hypertension(r"c:\Users\Sayli\OneDrive\Desktop\Aarogyadrishti-AI\data\raw\hypertension.csv")
+    df_ht = clean_hypertension(os.path.join(raw_dir, "hypertension.csv"))
     df_ht.to_csv(os.path.join(processed_dir, "hypertension_clean.csv"), index=False)
     print(f"Saved cleaned hypertension dataset to processed/hypertension_clean.csv (Shape: {df_ht.shape})")
 

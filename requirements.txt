@@ -1,10 +1,14 @@
-pandas
-numpy
-scikit-learn
-xgboost
-imbalanced-learn
-joblib
-streamlit
-plotly
-pyyaml
-shap
+# Core ML / data stack — pinned to versions verified to train and serve the
+# shipped models (see scripts/retrain_all.py).
+pandas==3.0.5
+numpy==2.4.6
+scikit-learn==1.9.0
+xgboost==3.2.0
+imbalanced-learn==0.14.2
+joblib==1.5.3
+shap==0.51.0
+pyyaml==6.0.1
+
+# Dashboard (compatible-release floors; any recent version works).
+streamlit>=1.30,<2
+plotly>=5.18
