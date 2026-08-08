@@ -944,8 +944,8 @@ else:
             # Heart & Hypertension are the shipped *chained* models).
             model_acc = {
                 "Diabetes":      ("88.8%", "0.913"),
-                "CKD":           ("79.3%", "0.892"),
-                "Heart Disease": ("81.3%", "0.683"),
+                "CKD":           ("79.0%", "0.742"),
+                "Heart Disease": ("81.0%", "0.677"),
                 "Hypertension":  ("73.7%", "0.803"),
             }
             ckd_footnote = True
@@ -964,7 +964,7 @@ else:
                 ckd_note = (
                     '<div style="font-size:0.65rem;color:#92400E;background:#FFFBEB;'
                     'border:1px solid #FCD34D;border-radius:4px;padding:3px 6px;margin-top:8px;line-height:1.4">'
-                    '⚠ Checkup-safe features only (79% acc). Full lab panel: 97.8%.'
+                    'Checkup-safe only (AUC 0.74). Adding a serum-creatinine lab → AUC 0.82.'
                     '</div>'
                 ) if name == "CKD" else ""
                 with col:
@@ -1059,11 +1059,11 @@ else:
                 # ── Metrics table ──
                 metrics_df = pd.DataFrame({
                     "Model":      ["Diabetes", "CKD", "Heart Disease", "Hypertension"],
-                    "Accuracy":   ["88.8%", "79.3%", "81.3%", "73.7%"],
-                    "ROC AUC":    ["0.913", "0.892", "0.683", "0.803"],
-                    "F1-Score":   ["0.553", "0.826", "0.287", "0.725"],
-                    "Dataset Size":["79,444", "400", "4,240", "70,000"],
-                    "Feature Set":["Checkup-safe (mixed-sex 100k)", "⚠ Reduced (lab tests removed)", "Chained checkup-safe", "Chained checkup-safe"],
+                    "Accuracy":   ["88.8%", "79.0%", "81.0%", "73.7%"],
+                    "ROC AUC":    ["0.913", "0.742", "0.677", "0.803"],
+                    "F1-Score":   ["0.553", "0.456", "0.279", "0.725"],
+                    "Dataset Size":["79,444", "5,154", "4,240", "70,000"],
+                    "Feature Set":["Checkup-safe (mixed-sex 100k)", "Checkup-safe (both-sex NHANES)", "Chained checkup-safe", "Chained checkup-safe"],
                 })
                 st.dataframe(metrics_df, use_container_width=True, hide_index=True)
 
@@ -1103,10 +1103,10 @@ else:
                     "Deployed Model":     ["Heart Disease", "Hypertension"],
                     "Dataset":            ["heart_clean / Framingham (n=4,240)", "hypertension_clean (n=70,000)"],
                     "Isolated Acc":       ["81.37%", "73.61%"],
-                    "Chained Acc":        ["81.27%", "73.71%"],
-                    "Δ Accuracy":         ["~0.00%", "+0.10%"],
+                    "Chained Acc":        ["80.99%", "73.66%"],
+                    "Δ Accuracy":         ["-0.38%", "+0.05%"],
                     "Isolated AUC":       ["0.682", "0.802"],
-                    "Chained AUC":        ["0.683", "0.803"],
+                    "Chained AUC":        ["0.677", "0.803"],
                 })
                 st.dataframe(chaining_df, use_container_width=True, hide_index=True)
 
@@ -1114,9 +1114,10 @@ else:
                 <div class="insight-card" style="margin-top:14px">
                   <p>
                     <strong style="color:var(--teal-600)">Key Finding —</strong>
-                    The chaining benefit is real but small and uneven — on both deployed downstream models
-                    it moves accuracy by well under half a percentage point (Heart ~0.00%, Hypertension +0.10%),
-                    since the upstream signal is largely already captured by the vitals. A wider ablation on two
+                    The chaining benefit is small and uneven — on both deployed downstream models it moves
+                    accuracy by well under half a percentage point (Heart −0.38%, Hypertension +0.05%), and can
+                    even be slightly negative, since the upstream signal is largely already captured by the
+                    vitals. A wider ablation on two
                     independent comorbidity cohorts (see <code>reports/chaining_results.md</code>) shows the
                     same pattern — every experiment moves well under a percentage point in either direction.
                     Chaining is a targeted prior, not a blanket accuracy win.

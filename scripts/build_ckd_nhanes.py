@@ -181,6 +181,14 @@ def build():
     out["acr"] = df["URDACT"].astype(float)
     out["classification"] = df["classification"].astype(int)
 
+    # Median-impute the checkup feature columns so the training pipeline (SMOTE)
+    # has clean input — mirrors how the other processed datasets are cleaned.
+    # Fasting glucose is a NHANES subsample, so it is the most-imputed column.
+    for col in ["bmi", "systolic_bp", "diastolic_bp", "glucose", "cholesterol", "smoking"]:
+        if out[col].isnull().any():
+            med = out[col].median()
+            out[col] = out[col].fillna(med if pd.notna(med) else 0.0)
+
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     out.to_csv(OUT, index=False)
 

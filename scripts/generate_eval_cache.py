@@ -43,7 +43,7 @@ HYPERTENSION_PARAMS = {**BASE_PARAMS, "subsample": 0.8, "colsample_bytree": 0.8}
 
 SCHEMAS = {
     "Diabetes":      {"csv": "diabetes_clean.csv",     "pkl": "diabetes_model.pkl",     "target": "Outcome",        "params": BASE_PARAMS},
-    "CKD":           {"csv": "ckd_clean.csv",          "pkl": "ckd_model.pkl",          "target": "classification", "params": BASE_PARAMS},
+    "CKD":           {"csv": "ckd_nhanes_clean.csv",   "pkl": "ckd_model.pkl",          "target": "classification", "params": BASE_PARAMS},
     "Heart Disease": {"csv": "heart_clean.csv",        "pkl": "heart_model.pkl",        "target": "target",         "params": BASE_PARAMS},
     "Hypertension":  {"csv": "hypertension_clean.csv", "pkl": "hypertension_model.pkl", "target": "cardio",         "params": HYPERTENSION_PARAMS},
 }
