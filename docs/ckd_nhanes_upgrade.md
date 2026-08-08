@@ -16,8 +16,9 @@ policy allows CDC.
 ## Step 1 — fetch the NHANES modules (2017-2018 cycle)
 ```bash
 mkdir -p data/raw/nhanes/2017-2018 && cd data/raw/nhanes/2017-2018
+# CDC's current URL layout: .../Public/<begin-year>/DataFiles/<FILE>.xpt
 for f in DEMO_J BMX_J BPX_J BIOPRO_J TCHOL_J GLU_J SMQ_J ALB_CR_J; do
-  curl -sSLO "https://wwwn.cdc.gov/Nchs/Nhanes/2017-2018/$f.XPT"
+  curl -sSLO "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/$f.xpt"
 done
 cd -
 ```
