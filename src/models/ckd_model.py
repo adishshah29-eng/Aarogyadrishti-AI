@@ -12,19 +12,22 @@ DATA_PROCESSED = os.path.join(PROJECT_ROOT, "data", "processed")
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
 
 def train_and_evaluate():
-    # Load processed data
-    data_path = os.path.join(DATA_PROCESSED, "ckd_clean.csv")
+    # Load processed data. Prefer the NHANES-derived cohort (5k+ adults, both
+    # sexes, CKD labelled by CKD-EPI 2021 eGFR + KDIGO albuminuria); fall back to
+    # the legacy 400-row UCI set if it has not been built yet.
+    data_path = os.path.join(DATA_PROCESSED, "ckd_nhanes_clean.csv")
+    if not os.path.exists(data_path):
+        data_path = os.path.join(DATA_PROCESSED, "ckd_clean.csv")
     if not os.path.exists(data_path):
         raise FileNotFoundError(f"Cleaned CKD data not found at {data_path}")
     df = pd.read_csv(data_path)
-    
-    # Define features
-    baseline_features = [
-        'age', 'diastolic_bp', 'glucose', 'sg', 'al', 'su', 'rbc', 'pc', 'pcc', 'ba', 
-        'bu', 'sc', 'sod', 'pot', 'hemo', 'pcv', 'wc', 'rc', 'htn', 'dm', 'cad', 
-        'appet', 'pe', 'ane'
-    ]
-    checkup_safe_features = ['age', 'diastolic_bp', 'glucose']
+
+    # Define features. The checkup-safe set is non-invasive routine inputs only.
+    # 'serum_creatinine' is included in the baseline for an illustrative
+    # "with-lab" comparison, but it is LEAKY (eGFR — hence the label — is derived
+    # from it), so it is deliberately excluded from the shipped checkup-safe model.
+    checkup_safe_features = ['age', 'sex', 'bmi', 'systolic_bp', 'diastolic_bp', 'glucose', 'cholesterol', 'smoking']
+    baseline_features = checkup_safe_features + (['serum_creatinine'] if 'serum_creatinine' in df.columns else [])
     target_col = 'classification'
     
     X_base = df[baseline_features]

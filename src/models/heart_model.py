@@ -75,9 +75,10 @@ def train_and_evaluate():
     # (Requires the Diabetes and CKD models to have been trained already.)
     df = add_upstream_risks(df)
 
-    # Define feature sets
-    baseline_features = ['age', 'sex', 'systolic_bp', 'cholesterol', 'cp', 'fbs', 'restecg', 'thalach', 'exang', 'oldpeak', 'slope', 'ca', 'thal']
-    isolated_features = ['age', 'sex', 'systolic_bp', 'cholesterol']
+    # Define feature sets (Framingham dataset).
+    baseline_features = ['age', 'sex', 'bmi', 'systolic_bp', 'diastolic_bp', 'glucose', 'cholesterol', 'smoking',
+                         'heartRate', 'cigsPerDay', 'BPMeds', 'prevalentHyp', 'diabetes', 'prevalentStroke']
+    isolated_features = ['age', 'sex', 'bmi', 'systolic_bp', 'diastolic_bp', 'glucose', 'cholesterol', 'smoking']
     chained_features = isolated_features + UPSTREAM_FEATURES   # SHIPPED feature set
     target_col = 'target'
 

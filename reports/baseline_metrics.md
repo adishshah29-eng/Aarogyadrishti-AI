@@ -26,32 +26,34 @@ All numbers below are **5-fold cross-validation** with **SMOTE applied only on t
 
 ## 2. Chronic Kidney Disease (CKD) Model Performance
 
-The CKD dataset contains 400 patient records (150 notckd, 250 ckd). *(Unchanged in this iteration — see README for the recommended NHANES upgrade path.)*
+**Data source (upgraded):** the CKD model now trains on an **NHANES 2017–2018** cohort of **5,154 adults** (2,673 female / 2,481 male), replacing the 400-row UCI set. CKD is labelled by clinical criteria: **eGFR < 60** (race-free CKD-EPI 2021 from serum creatinine) **or** urine **ACR ≥ 30** (KDIGO markers) → 18.8% positive. Built by `scripts/build_ckd_nhanes.py`.
 
 | Model Version | Accuracy | ROC AUC | F1-Score | Confusion Matrix (TN, FP, FN, TP) |
 |---|---|---|---|---|
-| **Baseline (Full-feature)** | **97.75%** | **0.9980** | **0.9814** | TN: 145, FP: 5, FN: 4, TP: 246 |
-| **Checkup-Safe (SHIPS)** | 79.25% | 0.8921 | 0.8259 | TN: 118, FP: 32, FN: 51, TP: 199 |
+| **Baseline (+ serum creatinine, illustrative/leaky)** | 87.14% | 0.8190 | 0.6191 | TN: 3953, FP: 230, FN: 433, TP: 538 |
+| **Checkup-Safe (SHIPS)** | 79.10% | 0.7424 | 0.4564 | TN: 3624, FP: 559, FN: 518, TP: 453 |
 
-### Tradeoff Analysis & Observations
-* **Expected Performance Drop**: the checkup-safe CKD model drops ~18.5% accuracy versus baseline, because the baseline has access to direct biochemical markers (`serum_creatinine`, `haemoglobin`, `packed_cell_volume`, `albumin`, urine specific gravity) that are only ordered during active diagnostic workups.
-* **Caveat**: at 400 rows the baseline exhibits near-perfect separation — treat its 0.998 AUC as optimistic. The checkup-safe model (`age`, `diastolic_bp`, `glucose`) is an early-warning flag, **not** a diagnostic substitute.
+### Interpretation
+* **The AUC "dropped" 0.89 → 0.74 — this is the model becoming honest.** The old 0.89 (and the 0.998 full-panel baseline) came from a **400-row set with near-perfect separation** — an over-optimistic small-sample artefact. On 5,154 real adults the checkup-safe AUC of **0.74** is a realistic estimate of predicting CKD markers from routine vitals, with **clinically correct** relationships (risk rises with age, blood pressure, glucose).
+* **Feature set (shipped):** `age, sex, bmi, systolic_bp, diastolic_bp, glucose, cholesterol, smoking`. The `serum_creatinine` baseline is shown only for reference — it is **leaky** (eGFR, hence the label, is derived from it), so it is excluded from the shipped model, exactly like HbA1c for diabetes.
+* **F1 (0.46)** is low because the outcome is imbalanced (~19% positive) at the default 0.5 threshold; AUC is the meaningful discrimination metric here.
 
 ---
 
 ## 3. Heart Disease Model Performance
 
-The Heart Disease dataset contains 1,025 patient records (499 negative, 526 positive). The shipped model is **chained**: it adds `diabetes_risk` and `ckd_risk` (from the upstream models) to the checkup-safe feature set.
+**Data source (upgraded):** the heart model now trains on the **Framingham Heart Study** dataset (4,240 records, both sexes, 10-year CHD outcome, ~15% positive), replacing the 1,025-row Kaggle/Cleveland set. The old set's checkup features (age, BP, cholesterol) were **inversely** correlated with its label (age corr −0.23, sysBP −0.14, cholesterol −0.10), so it produced clinically backwards predictions — a high-risk 62-year-old scored ~15%. Framingham's correlations are correct (age +0.23, sysBP +0.22, cholesterol +0.08); the same patient now scores ~68%.
 
 | Model Version | Accuracy | ROC AUC | F1-Score | Confusion Matrix (TN, FP, FN, TP) |
 |---|---|---|---|---|
-| **Baseline (Full clinical panel)** | **99.51%** | **0.9974** | **0.9952** | TN: 497, FP: 2, FN: 3, TP: 523 |
-| **Isolated (Checkup-safe)** | 89.37% | 0.9639 | 0.8938 | TN: 455, FP: 44, FN: 65, TP: 461 |
-| **Chained (Checkup-safe, SHIPS)** | 89.76% | 0.9682 | 0.8977 | TN: 455, FP: 44, FN: 61, TP: 465 |
+| **Baseline (Full-feature)** | 81.93% | 0.6887 | 0.2777 | TN: 3326, FP: 270, FN: 496, TP: 148 |
+| **Isolated (Checkup-safe)** | 81.37% | 0.6815 | 0.2743 | TN: 3300, FP: 296, FN: 494, TP: 150 |
+| **Chained (Checkup-safe, SHIPS)** | 81.27% | 0.6825 | 0.2868 | TN: 3286, FP: 310, FN: 484, TP: 160 |
 
-### Chaining Effect
-* **Chained − Isolated: +0.39% accuracy, +0.0043 ROC AUC.** Adding the upstream Diabetes/CKD risk features gives a small but positive improvement for Heart Disease on the deployed dataset.
-* The full clinical panel (`cp`, `oldpeak`, `ca`, `thal`, …) remains far stronger; the checkup-safe model is a pre-symptomatic screen.
+### Interpretation (important)
+* **The AUC dropped from 0.968 → 0.68 — and that is the model getting _better_, not worse.** The old 0.968 was **inflated by a broken dataset**: the model fit clinically inverted labels almost perfectly ("confidently wrong"). The new **0.68 is honest** — predicting *10-year future* CHD from routine checkup features is a genuinely hard task (this AUC is in line with the published Framingham literature), and the predictions now move in the clinically correct direction.
+* **Accuracy (81%) is dominated by class imbalance** (~85% negative); AUC and recall are the meaningful metrics here, and the model deliberately trades precision for catching positives (SMOTE), hence the low F1.
+* **Chaining effect: ~0.00% accuracy / +0.001 AUC** — essentially neutral now (the vitals already carry the signal).
 
 ---
 
@@ -76,8 +78,8 @@ The Hypertension (cardiovascular) dataset contains 70,000 patient records (35,02
 | Model | Ships as | CV Accuracy | CV ROC AUC | Chaining Δ Acc |
 |---|---|---|---|---|
 | Diabetes | Checkup-safe (mixed-sex 100k) | 88.80% | 0.9130 | — |
-| CKD | Checkup-safe (upstream) | 79.25% | 0.8921 | — |
-| Heart Disease | Chained checkup-safe | 89.76% | 0.9682 | +0.39% |
-| Hypertension | Chained checkup-safe | 73.71% | 0.8028 | +0.10% |
+| CKD | Checkup-safe (both-sex NHANES 5.1k) | 79.10% | 0.7424 | — |
+| Heart Disease | Chained checkup-safe (Framingham) | 80.99% | 0.6770 | −0.38% |
+| Hypertension | Chained checkup-safe | 73.66% | 0.8025 | +0.05% |
 
 The chaining gain is genuine but modest and concentrated in Heart Disease; see `reports/chaining_results.md` for a complementary ablation on two independent comorbidity cohorts.

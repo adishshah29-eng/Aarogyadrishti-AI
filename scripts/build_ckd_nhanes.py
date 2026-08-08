@@ -14,16 +14,17 @@ HOW CKD IS DEFINED (KDIGO markers, cross-sectional):
     (NHANES is a single visit, so this flags CKD *markers*, not the 3-month
     persistence required for a clinical diagnosis — documented as a caveat.)
 
-DATA ACCESS: NHANES XPT files live at
-    https://wwwn.cdc.gov/Nchs/Nhanes/<cycle>/<FILE>.XPT
+DATA ACCESS: NHANES XPT files live at (current CDC layout)
+    https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/<begin-year>/DataFiles/<FILE>.xpt
 This script tries to download them; if the network blocks cdc.gov (as some
 sandboxes do), it falls back to reading local copies you place under
     data/raw/nhanes/<cycle>/<FILE>.XPT
 
-To fetch the 2017-2018 cycle on a machine with internet, run:
+To fetch the 2017-2018 cycle on a machine with internet, run (note CDC's current
+URL layout: .../Public/<begin-year>/DataFiles/<FILE>.xpt):
     mkdir -p data/raw/nhanes/2017-2018 && cd data/raw/nhanes/2017-2018
     for f in DEMO_J BMX_J BPX_J BIOPRO_J TCHOL_J GLU_J SMQ_J ALB_CR_J; do
-        curl -sSLO "https://wwwn.cdc.gov/Nchs/Nhanes/2017-2018/$f.XPT"; done
+        curl -sSLO "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/$f.xpt"; done
 
 Then:  python scripts/build_ckd_nhanes.py         # writes data/processed/ckd_nhanes_clean.csv
 Self-test the eGFR math (no data needed):  python scripts/build_ckd_nhanes.py --selftest
@@ -105,12 +106,20 @@ def derive_smoking(smq020, smq040):
 
 # ─────────────────────────── IO ───────────────────────────
 def _read_xpt(cycle, suffix, stem):
-    """Read one NHANES module as a DataFrame: local copy first, then CDC."""
-    fname = f"{stem}{suffix}.XPT"
-    local = os.path.join(RAW_NHANES, cycle, fname)
-    if os.path.exists(local):
-        return pd.read_sas(local, format="xport")
-    url = f"https://wwwn.cdc.gov/Nchs/Nhanes/{cycle}/{fname}"
+    """Read one NHANES module as a DataFrame: local copy first, then CDC.
+
+    Accepts a local file in either case (``BIOPRO_J.XPT`` or ``.xpt``). The CDC
+    download URL follows the current layout:
+    ``.../Nchs/Data/Nhanes/Public/<begin-year>/DataFiles/<FILE>.xpt``.
+    """
+    base = f"{stem}{suffix}"
+    for ext in (".XPT", ".xpt"):
+        local = os.path.join(RAW_NHANES, cycle, base + ext)
+        if os.path.exists(local):
+            return pd.read_sas(local, format="xport")
+    begin_year = cycle.split("-")[0]
+    url = f"https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/{begin_year}/DataFiles/{base}.xpt"
+    fname = base + ".xpt"
     try:
         import urllib.request
         with urllib.request.urlopen(url, timeout=60) as resp:
@@ -171,6 +180,14 @@ def build():
     out["egfr"] = df["egfr"].astype(float)
     out["acr"] = df["URDACT"].astype(float)
     out["classification"] = df["classification"].astype(int)
+
+    # Median-impute the checkup feature columns so the training pipeline (SMOTE)
+    # has clean input — mirrors how the other processed datasets are cleaned.
+    # Fasting glucose is a NHANES subsample, so it is the most-imputed column.
+    for col in ["bmi", "systolic_bp", "diastolic_bp", "glucose", "cholesterol", "smoking"]:
+        if out[col].isnull().any():
+            med = out[col].median()
+            out[col] = out[col].fillna(med if pd.notna(med) else 0.0)
 
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     out.to_csv(OUT, index=False)
