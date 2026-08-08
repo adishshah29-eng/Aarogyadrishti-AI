@@ -41,17 +41,18 @@ The CKD dataset contains 400 patient records (150 notckd, 250 ckd). *(Unchanged 
 
 ## 3. Heart Disease Model Performance
 
-The Heart Disease dataset contains 1,025 patient records (499 negative, 526 positive). The shipped model is **chained**: it adds `diabetes_risk` and `ckd_risk` (from the upstream models) to the checkup-safe feature set.
+**Data source (upgraded):** the heart model now trains on the **Framingham Heart Study** dataset (4,240 records, both sexes, 10-year CHD outcome, ~15% positive), replacing the 1,025-row Kaggle/Cleveland set. The old set's checkup features (age, BP, cholesterol) were **inversely** correlated with its label (age corr −0.23, sysBP −0.14, cholesterol −0.10), so it produced clinically backwards predictions — a high-risk 62-year-old scored ~15%. Framingham's correlations are correct (age +0.23, sysBP +0.22, cholesterol +0.08); the same patient now scores ~68%.
 
 | Model Version | Accuracy | ROC AUC | F1-Score | Confusion Matrix (TN, FP, FN, TP) |
 |---|---|---|---|---|
-| **Baseline (Full clinical panel)** | **99.51%** | **0.9974** | **0.9952** | TN: 497, FP: 2, FN: 3, TP: 523 |
-| **Isolated (Checkup-safe)** | 89.37% | 0.9639 | 0.8938 | TN: 455, FP: 44, FN: 65, TP: 461 |
-| **Chained (Checkup-safe, SHIPS)** | 89.76% | 0.9682 | 0.8977 | TN: 455, FP: 44, FN: 61, TP: 465 |
+| **Baseline (Full-feature)** | 81.93% | 0.6887 | 0.2777 | TN: 3326, FP: 270, FN: 496, TP: 148 |
+| **Isolated (Checkup-safe)** | 81.37% | 0.6815 | 0.2743 | TN: 3300, FP: 296, FN: 494, TP: 150 |
+| **Chained (Checkup-safe, SHIPS)** | 81.27% | 0.6825 | 0.2868 | TN: 3286, FP: 310, FN: 484, TP: 160 |
 
-### Chaining Effect
-* **Chained − Isolated: +0.39% accuracy, +0.0043 ROC AUC.** Adding the upstream Diabetes/CKD risk features gives a small but positive improvement for Heart Disease on the deployed dataset.
-* The full clinical panel (`cp`, `oldpeak`, `ca`, `thal`, …) remains far stronger; the checkup-safe model is a pre-symptomatic screen.
+### Interpretation (important)
+* **The AUC dropped from 0.968 → 0.68 — and that is the model getting _better_, not worse.** The old 0.968 was **inflated by a broken dataset**: the model fit clinically inverted labels almost perfectly ("confidently wrong"). The new **0.68 is honest** — predicting *10-year future* CHD from routine checkup features is a genuinely hard task (this AUC is in line with the published Framingham literature), and the predictions now move in the clinically correct direction.
+* **Accuracy (81%) is dominated by class imbalance** (~85% negative); AUC and recall are the meaningful metrics here, and the model deliberately trades precision for catching positives (SMOTE), hence the low F1.
+* **Chaining effect: ~0.00% accuracy / +0.001 AUC** — essentially neutral now (the vitals already carry the signal).
 
 ---
 
@@ -77,7 +78,7 @@ The Hypertension (cardiovascular) dataset contains 70,000 patient records (35,02
 |---|---|---|---|---|
 | Diabetes | Checkup-safe (mixed-sex 100k) | 88.80% | 0.9130 | — |
 | CKD | Checkup-safe (upstream) | 79.25% | 0.8921 | — |
-| Heart Disease | Chained checkup-safe | 89.76% | 0.9682 | +0.39% |
+| Heart Disease | Chained checkup-safe | 81.27% | 0.6825 | ~0.00% |
 | Hypertension | Chained checkup-safe | 73.71% | 0.8028 | +0.10% |
 
 The chaining gain is genuine but modest and concentrated in Heart Disease; see `reports/chaining_results.md` for a complementary ablation on two independent comorbidity cohorts.

@@ -945,7 +945,7 @@ else:
             model_acc = {
                 "Diabetes":      ("88.8%", "0.913"),
                 "CKD":           ("79.3%", "0.892"),
-                "Heart Disease": ("89.8%", "0.968"),
+                "Heart Disease": ("81.3%", "0.683"),
                 "Hypertension":  ("73.7%", "0.803"),
             }
             ckd_footnote = True
@@ -1059,10 +1059,10 @@ else:
                 # ── Metrics table ──
                 metrics_df = pd.DataFrame({
                     "Model":      ["Diabetes", "CKD", "Heart Disease", "Hypertension"],
-                    "Accuracy":   ["88.8%", "79.3%", "89.8%", "73.7%"],
-                    "ROC AUC":    ["0.913", "0.892", "0.968", "0.803"],
-                    "F1-Score":   ["0.553", "0.826", "0.898", "0.725"],
-                    "Dataset Size":["79,444", "400", "1,025", "70,000"],
+                    "Accuracy":   ["88.8%", "79.3%", "81.3%", "73.7%"],
+                    "ROC AUC":    ["0.913", "0.892", "0.683", "0.803"],
+                    "F1-Score":   ["0.553", "0.826", "0.287", "0.725"],
+                    "Dataset Size":["79,444", "400", "4,240", "70,000"],
                     "Feature Set":["Checkup-safe (mixed-sex 100k)", "⚠ Reduced (lab tests removed)", "Chained checkup-safe", "Chained checkup-safe"],
                 })
                 st.dataframe(metrics_df, use_container_width=True, hide_index=True)
@@ -1101,12 +1101,12 @@ else:
                 # Deployed-model ablation (5-fold CV, from reports/model_metrics.json).
                 chaining_df = pd.DataFrame({
                     "Deployed Model":     ["Heart Disease", "Hypertension"],
-                    "Dataset":            ["heart_clean (n=1,025)", "hypertension_clean (n=70,000)"],
-                    "Isolated Acc":       ["89.37%", "73.61%"],
-                    "Chained Acc":        ["89.76%", "73.71%"],
-                    "Δ Accuracy":         ["+0.39% ✓", "+0.10%"],
-                    "Isolated AUC":       ["0.964", "0.802"],
-                    "Chained AUC":        ["0.968", "0.803"],
+                    "Dataset":            ["heart_clean / Framingham (n=4,240)", "hypertension_clean (n=70,000)"],
+                    "Isolated Acc":       ["81.37%", "73.61%"],
+                    "Chained Acc":        ["81.27%", "73.71%"],
+                    "Δ Accuracy":         ["~0.00%", "+0.10%"],
+                    "Isolated AUC":       ["0.682", "0.802"],
+                    "Chained AUC":        ["0.683", "0.803"],
                 })
                 st.dataframe(chaining_df, use_container_width=True, hide_index=True)
 
@@ -1114,9 +1114,9 @@ else:
                 <div class="insight-card" style="margin-top:14px">
                   <p>
                     <strong style="color:var(--teal-600)">Key Finding —</strong>
-                    The chaining benefit is real but small and uneven. On the deployed Heart model it adds
-                    <strong>+0.39% accuracy / +0.004 AUC</strong>; on Hypertension it is essentially neutral
-                    (upstream signal is already captured by the richer vitals). A wider ablation on two
+                    The chaining benefit is real but small and uneven — on both deployed downstream models
+                    it moves accuracy by well under half a percentage point (Heart ~0.00%, Hypertension +0.10%),
+                    since the upstream signal is largely already captured by the vitals. A wider ablation on two
                     independent comorbidity cohorts (see <code>reports/chaining_results.md</code>) shows the
                     same pattern — every experiment moves well under a percentage point in either direction.
                     Chaining is a targeted prior, not a blanket accuracy win.

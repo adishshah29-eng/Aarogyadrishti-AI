@@ -226,7 +226,58 @@ def clean_ckd(path: str) -> pd.DataFrame:
 
 def clean_heart(path: str) -> pd.DataFrame:
     """
-    Clean the Cleveland Heart Disease dataset.
+    Clean the Framingham Heart Study dataset (10-year CHD outcome).
+
+    This replaces the legacy 1,025-row Kaggle heart dataset, whose checkup
+    features (age, blood pressure, cholesterol) were **inversely** correlated
+    with the label — older / higher-BP / higher-cholesterol patients were
+    coded as *lower* risk, producing clinically backwards predictions. In
+    Framingham these relationships are correct (age/sysBP/totChol/glucose all
+    correlate positively with 10-year CHD), and the checkup-friendly columns
+    (age, sex, BMI, systolic/diastolic BP, glucose, total cholesterol, smoking)
+    map directly onto the canonical schema.
+    """
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Raw heart file not found at {path}")
+
+    df = pd.read_csv(path)
+
+    df_clean = pd.DataFrame()
+    df_clean['patient_id'] = [f"fram_{i}" for i in range(len(df))]
+    df_clean['age'] = df['age'].astype(float)
+    df_clean['sex'] = df['male'].astype(float)          # 1 = male, 0 = female
+    df_clean['bmi'] = df['BMI'].astype(float)
+    df_clean['systolic_bp'] = df['sysBP'].astype(float)
+    df_clean['diastolic_bp'] = df['diaBP'].astype(float)
+    df_clean['glucose'] = df['glucose'].astype(float)
+    df_clean['cholesterol'] = df['totChol'].astype(float)
+    df_clean['smoking'] = df['currentSmoker'].astype(float)
+    df_clean['alcohol'] = np.nan
+    df_clean['physical_activity'] = np.nan
+    df_clean['family_history'] = np.nan
+
+    # Extra Framingham columns kept for the full-feature baseline comparison.
+    for col in ['heartRate', 'cigsPerDay', 'BPMeds', 'prevalentHyp', 'diabetes', 'prevalentStroke']:
+        df_clean[col] = df[col].astype(float)
+
+    df_clean['target'] = df['TenYearCHD'].astype(int)
+
+    # Median-impute any missing feature values so SMOTE/XGBoost have clean input.
+    for col in df_clean.columns:
+        if col in ('patient_id', 'target'):
+            continue
+        if df_clean[col].isnull().any():
+            med = df_clean[col].median()
+            df_clean[col] = df_clean[col].fillna(med if pd.notna(med) else 0.0)
+
+    return df_clean
+
+
+def clean_heart_cleveland(path: str) -> pd.DataFrame:
+    """
+    Legacy cleaner for the 1,025-row Kaggle/Cleveland heart dataset. Retained
+    for provenance; superseded by clean_heart() (Framingham) because this
+    dataset's checkup features are inversely correlated with the label.
     - Map columns to the canonical schema.
     - Perform median imputation for missing values.
     """
@@ -364,8 +415,8 @@ if __name__ == "__main__":
     df_ckd.to_csv(os.path.join(processed_dir, "ckd_clean.csv"), index=False)
     print(f"Saved cleaned CKD dataset to processed/ckd_clean.csv (Shape: {df_ckd.shape})")
 
-    print("\nCleaning Heart disease dataset...")
-    df_heart = clean_heart(os.path.join(raw_dir, "heart.csv"))
+    print("\nCleaning Heart disease dataset (Framingham)...")
+    df_heart = clean_heart(os.path.join(raw_dir, "framingham.csv"))
     df_heart.to_csv(os.path.join(processed_dir, "heart_clean.csv"), index=False)
     print(f"Saved cleaned heart dataset to processed/heart_clean.csv (Shape: {df_heart.shape})")
 
