@@ -34,6 +34,10 @@ XGB_PARAMS = {
     'eval_metric': 'logloss',
 }
 
+# Monotonic constraints for the shipped chained feature set (10 features):
+# age↑ sex(any) bmi↑ sysBP↑ diaBP(any) glucose↑ chol↑ smoking↑ dia_risk↑ ckd_risk↑
+CHAINED_MONOTONIC = (1, 0, 1, 1, 0, 1, 1, 1, 1, 1)
+
 
 def _run_cv(X, y, xgb_params=XGB_PARAMS, n_splits=5):
     """5-fold CV with SMOTE applied on the training split only. Returns mean
@@ -89,7 +93,8 @@ def train_and_evaluate():
     print("Heart — Isolated checkup-safe 5-fold CV...")
     m_iso = _run_cv(df[isolated_features], y)
     print("Heart — Chained checkup-safe 5-fold CV...")
-    m_chain = _run_cv(df[chained_features], y)
+    chained_params = {**XGB_PARAMS, 'monotone_constraints': CHAINED_MONOTONIC}
+    m_chain = _run_cv(df[chained_features], y, xgb_params=chained_params)
 
     for label, m in [("Baseline (full panel)", m_base),
                      ("Isolated checkup-safe", m_iso),
@@ -108,7 +113,7 @@ def train_and_evaluate():
     medians = df[chained_features].median().to_dict()
     smote = SMOTE(random_state=42)
     X_res, y_res = smote.fit_resample(df[chained_features], y)
-    final_model = XGBClassifier(**XGB_PARAMS)
+    final_model = XGBClassifier(**{**XGB_PARAMS, 'monotone_constraints': CHAINED_MONOTONIC})
     final_model.fit(X_res, y_res)
 
     os.makedirs(MODELS_DIR, exist_ok=True)

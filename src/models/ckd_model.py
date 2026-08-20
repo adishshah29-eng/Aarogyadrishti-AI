@@ -47,12 +47,14 @@ def train_and_evaluate():
     }
     
     # XGBoost hyperparameters
+    # Monotonic constraints: age↑ sex(any) bmi↑ sysBP↑ diaBP(any) glucose↑ chol(any) smoking(any)
     xgb_params = {
         'n_estimators': 100,
         'max_depth': 4,
         'learning_rate': 0.1,
         'random_state': 42,
-        'eval_metric': 'logloss'
+        'eval_metric': 'logloss',
+        'monotone_constraints': (1, 0, 1, 1, 0, 1, 0, 0),
     }
     
     # 5-fold CV for Baseline (Full-feature) Model

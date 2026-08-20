@@ -943,10 +943,10 @@ else:
             # Model accuracy annotations per disease (5-fold CV, checkup-safe;
             # Heart & Hypertension are the shipped *chained* models).
             model_acc = {
-                "Diabetes":      ("88.8%", "0.913"),
-                "CKD":           ("79.0%", "0.742"),
-                "Heart Disease": ("81.0%", "0.677"),
-                "Hypertension":  ("73.7%", "0.803"),
+                "Diabetes":      ("80.7%", "0.848"),
+                "CKD":           ("79.3%", "0.749"),
+                "Heart Disease": ("77.4%", "0.686"),
+                "Hypertension":  ("73.3%", "0.800"),
             }
             ckd_footnote = True
 
@@ -1147,16 +1147,16 @@ else:
                   <div style="font-size:0.82rem;color:#991B1B;line-height:1.7">
                     This is a <strong>screening tool, not a diagnostic instrument.</strong>
                     Results must be reviewed by a qualified clinician before any clinical decision.
-                    <strong>Diabetes model:</strong> trained on a 100k-row, <strong>mixed-sex</strong>
-                    adult dataset (≈48k female / 31k male), so both sexes are represented; note the
-                    outcome is imbalanced (~11% positive), which lowers F1 at the default threshold even
-                    though AUC is strong (0.91).
+                    <strong>Diabetes model:</strong> trained on <strong>NHANES 2021-2023</strong>
+                    (7,912 adults, both sexes, ~15.5% positive) with monotonic constraints ensuring
+                    clinically correct feature directions (higher glucose always increases risk).
+                    <strong>CKD model:</strong> trained on NHANES 2017-2018 (5,154 adults, both sexes)
+                    with CKD-EPI 2021 eGFR labelling; a full lab panel is needed for clinical CKD diagnosis.
                     <strong>Chaining:</strong> the upstream Diabetes/CKD risk features fed to the Heart
                     and Hypertension models were, at training time, computed on datasets missing some
                     inputs (median-imputed), so those features carry less signal in training than at
                     live inference — a cross-dataset limitation, not a validated end-to-end pipeline.
-                    <strong>CKD model:</strong> still only 400 rows with reduced features — a full lab
-                    panel is needed for clinical CKD diagnosis. BRFSS data is self-reported.
+                    All models use monotonic constraints to prevent clinically inverted predictions.
                   </div>
                 </div>
                 """, unsafe_allow_html=True)
