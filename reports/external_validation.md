@@ -2,25 +2,15 @@
 
 The CKD, Heart Disease, and Hypertension shipped models were tested on a cohort **none of them were trained on**: NHANES August 2021-August 2023, a nationally representative US survey of different people than any of their training datasets (CKD: NHANES 2017-2018; Heart: Framingham; Hypertension: cardio/Kaggle dataset). Ground-truth labels are derived independently of our models, from objective labs and doctor-diagnosis questionnaire answers (doctor-diagnosed hypertension/heart disease, eGFR + urine ACR for CKD) — never from our own predictions, so there is no circularity.
 
-**Diabetes is excluded from this table.** As of the P0 monotonic-constraints fix, the Diabetes model now trains directly on this same NHANES 2021-2023 cohort (replacing the synthetic 100k Kaggle dataset that caused a fasting-glucose=158 mg/dL patient to be scored 4.1% "LOW" risk). Scoring the Diabetes model on this cohort would therefore be in-sample evaluation, not external validation — its honest out-of-sample estimate is the 5-fold CV in `reports/baseline_metrics.md` (Accuracy 80.67%, AUC 0.8475).
+**Diabetes is excluded from this table.** As of the P0 monotonic-constraints fix, the Diabetes model now trains directly on this same NHANES 2021-2023 cohort (replacing the synthetic 100k Kaggle dataset that caused a fasting-glucose=158 mg/dL patient to be scored 4.1% "LOW" risk). Scoring the Diabetes model on this cohort would therefore be in-sample evaluation, not external validation — its honest out-of-sample estimate is the 5-fold CV in `reports/baseline_metrics.md` (Accuracy 81.19%, AUC 0.8624).
 
 ## Results
 
 | Disease | N (labelled) | Prevalence | AUC | Accuracy | F1 | Confusion (TN,FP,FN,TP) |
 |---|---|---|---|---|---|---|
-| CKD | 5658 | 17.2% | 0.7562 | 78.49% | 0.4394 | [3964, 722, 495, 477] |
-| Heart Disease | 7772 | 8.0% | 0.7455 | 75.73% | 0.2504 | [5571, 1579, 307, 315] |
-| Hypertension | 8139 | 36.3% | 0.7719 | 70.66% | 0.6136 | [3855, 1328, 1060, 1896] |
-
-## Training-time vs. external AUC
-
-| Disease | CV AUC (train dataset) | **External AUC (NHANES 2021-2023, unseen)** | Gap | Verdict |
-|---|---|---|---|---|
-| CKD | 0.7492 | **0.7562** | +0.007 | ✅ Holds up |
-| Heart Disease | 0.6863 | **0.7455** | +0.059 | ✅ Holds up (better on a larger sample) |
-| Hypertension | 0.7998 | **0.7719** | −0.028 | ✅ Small, expected drop |
-
-All three externally-validated models generalize well — none shows the kind of large drop that would indicate overfitting to training-set quirks.
+| CKD | 5658 | 17.2% | 0.7731 | 80.61% | 0.4672 | [4080, 606, 491, 481] |
+| Heart Disease | 7772 | 8.0% | 0.7625 | 74.99% | 0.2714 | [5466, 1684, 260, 362] |
+| Hypertension | 8139 | 36.3% | 0.7742 | 71.10% | 0.6177 | [3887, 1296, 1056, 1900] |
 
 ## How to read this
 

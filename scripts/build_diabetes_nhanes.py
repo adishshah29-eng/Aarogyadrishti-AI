@@ -34,18 +34,20 @@ def main():
     demo = _read("DEMO_L")[["SEQN", "RIDAGEYR", "RIAGENDR"]]
     df = demo[demo["RIDAGEYR"] >= 18].copy().reset_index(drop=True)
 
-    df = df.merge(_read("BMX_L")[["SEQN", "BMXBMI"]], on="SEQN", how="left")
+    df = df.merge(_read("BMX_L")[["SEQN", "BMXBMI", "BMXWAIST", "BMXHT"]], on="SEQN", how="left")
 
     bpxo = _read("BPXO_L")
     sy = [c for c in bpxo.columns if c.startswith("BPXOSY")]
     di = [c for c in bpxo.columns if c.startswith("BPXODI")]
-    df = df.merge(bpxo[["SEQN"] + sy + di], on="SEQN", how="left")
+    pls = [c for c in bpxo.columns if c.startswith("BPXOPLS")]
+    df = df.merge(bpxo[["SEQN"] + sy + di + pls], on="SEQN", how="left")
 
     df = df.merge(_read("TCHOL_L")[["SEQN", "LBXTC"]], on="SEQN", how="left")
     df = df.merge(_read("GLU_L")[["SEQN", "LBXGLU"]], on="SEQN", how="left")
     df = df.merge(_read("GHB_L")[["SEQN", "LBXGH"]], on="SEQN", how="left")
-    df = df.merge(_read("SMQ_L")[["SEQN", "SMQ020", "SMQ040"]], on="SEQN", how="left")
+    df = df.merge(_read("SMQ_L")[["SEQN", "SMQ020", "SMQ040", "SMD650"]], on="SEQN", how="left")
     df = df.merge(_read("DIQ_L")[["SEQN", "DIQ010"]], on="SEQN", how="left")
+    df = df.merge(_read("BIOPRO_L")[["SEQN", "LBXSUA"]], on="SEQN", how="left")
 
     is_female = df["RIAGENDR"] == 2
 
@@ -67,6 +69,13 @@ def main():
     out["glucose"] = df["LBXGLU"].astype(float)
     out["cholesterol"] = df["LBXTC"].astype(float)
     out["smoking"] = derive_smoking(df["SMQ020"], df["SMQ040"])
+    out["waist_circumference"] = df["BMXWAIST"].astype(float)
+    out["height"] = df["BMXHT"].astype(float)
+    out["resting_pulse"] = avg_bp(df, pls)
+    out["uric_acid"] = df["LBXSUA"].astype(float)
+    # Cigs/day is only asked of current smokers; non/former smokers -> 0.
+    out["cigs_per_day"] = pd.to_numeric(df["SMD650"], errors="coerce")
+    out.loc[out["smoking"] == 0.0, "cigs_per_day"] = out.loc[out["smoking"] == 0.0, "cigs_per_day"].fillna(0.0)
     out["Outcome"] = label
 
     out = out.dropna(subset=["Outcome"]).reset_index(drop=True)
@@ -74,7 +83,9 @@ def main():
 
     # Median-impute missing checkup features (glucose is a fasting subsample)
     feat_cols = ["age", "sex", "bmi", "systolic_bp", "diastolic_bp",
-                 "glucose", "cholesterol", "smoking"]
+                 "glucose", "cholesterol", "smoking",
+                 "waist_circumference", "resting_pulse", "uric_acid", "cigs_per_day",
+                 "height"]
     for col in feat_cols:
         med = out[col].median()
         out[col] = out[col].fillna(med)

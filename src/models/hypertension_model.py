@@ -20,6 +20,7 @@ from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, confusion_m
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 from src.models.upstream import add_upstream_risks, UPSTREAM_FEATURES
+from src.models.feature_engineering import add_pulse_pressure, add_mean_arterial_pressure
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DATA_PROCESSED = os.path.join(PROJECT_ROOT, "data", "processed")
@@ -36,9 +37,20 @@ XGB_PARAMS = {
     'colsample_bytree': 0.8,
 }
 
-# Monotonic constraints for the shipped chained feature set (12 features):
-# age↑ sex(any) bmi↑ sysBP↑ diaBP↑ chol↑ glucose↑ smoking(any) alcohol(any) activity(any) dia_risk↑ ckd_risk↑
-CHAINED_MONOTONIC = (1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1)
+RAW_ISOLATED_FEATURES = ['age', 'sex', 'bmi', 'systolic_bp', 'diastolic_bp', 'cholesterol', 'glucose', 'smoking', 'alcohol', 'physical_activity']
+ENGINEERED_FEATURES = ['pulse_pressure', 'mean_arterial_pressure']
+
+
+def _engineer(df: pd.DataFrame) -> pd.DataFrame:
+    df = add_pulse_pressure(df)
+    df = add_mean_arterial_pressure(df)
+    return df
+
+
+# Monotonic constraints for the shipped chained feature set (14 features):
+# age↑ sex(any) bmi↑ sysBP↑ diaBP↑ chol↑ glucose↑ smoking(any) alcohol(any) activity(any)
+# pulse_pressure↑ MAP↑ dia_risk↑ ckd_risk↑
+CHAINED_MONOTONIC = (1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1)
 
 
 def _run_cv(X, y, xgb_params=XGB_PARAMS, n_splits=5):
@@ -76,13 +88,14 @@ def train_and_evaluate():
     if not os.path.exists(data_path):
         raise FileNotFoundError(f"Cleaned hypertension data not found at {data_path}")
     df = pd.read_csv(data_path)
+    df = _engineer(df)
 
     # Append genuine upstream risk scores so the model can chain on them.
     df = add_upstream_risks(df)
 
     # Define feature sets
     baseline_features = ['age', 'sex', 'bmi', 'systolic_bp', 'diastolic_bp', 'cholesterol', 'glucose', 'smoking', 'alcohol', 'physical_activity', 'height', 'weight']
-    isolated_features = ['age', 'sex', 'bmi', 'systolic_bp', 'diastolic_bp', 'cholesterol', 'glucose', 'smoking', 'alcohol', 'physical_activity']
+    isolated_features = RAW_ISOLATED_FEATURES + ENGINEERED_FEATURES
     chained_features = isolated_features + UPSTREAM_FEATURES   # SHIPPED feature set
     target_col = 'cardio'
 
@@ -156,16 +169,24 @@ def predict_risk(patient_df) -> float:
     features = model_data['features']
     medians = model_data['medians']
     
-    # Impute missing features using training medians
+    # Impute missing raw features using training medians, then derive engineered ones
+    for col in RAW_ISOLATED_FEATURES:
+        if col not in df.columns:
+            df[col] = medians[col]
+        else:
+            df[col] = df[col].fillna(medians[col])
+    df = _engineer(df)
+
+    # Remaining features (e.g. chained upstream risks) fall back to medians too
     for col in features:
         if col not in df.columns:
             df[col] = medians[col]
         else:
             df[col] = df[col].fillna(medians[col])
-            
+
     # Extract only features model was trained on
     df_feats = df[features]
-    
+
     # Predict probability
     probs = model.predict_proba(df_feats)
     return float(probs[0, 1])
@@ -184,16 +205,24 @@ def predict_risk_batch(patient_df) -> pd.DataFrame:
     features = model_data['features']
     medians = model_data['medians']
     
-    # Impute missing features
+    # Impute missing raw features using training medians, then derive engineered ones
+    for col in RAW_ISOLATED_FEATURES:
+        if col not in df.columns:
+            df[col] = medians[col]
+        else:
+            df[col] = df[col].fillna(medians[col])
+    df = _engineer(df)
+
+    # Remaining features (e.g. chained upstream risks) fall back to medians too
     for col in features:
         if col not in df.columns:
             df[col] = medians[col]
         else:
             df[col] = df[col].fillna(medians[col])
-            
+
     # Extract features
     df_feats = df[features]
-    
+
     # Predict probabilities
     probs = model.predict_proba(df_feats)[:, 1]
     

@@ -46,9 +46,9 @@ CYCLES = {"2017-2018": "_J"}
 # Logical module name -> base file stem (suffix appended per cycle).
 MODULES = {
     "DEMO": "DEMO",      # demographics: age, sex
-    "BMX": "BMX",        # body measures: BMI
-    "BPX": "BPX",        # blood pressure
-    "BIOPRO": "BIOPRO",  # standard biochemistry: serum creatinine
+    "BMX": "BMX",        # body measures: BMI, waist circumference
+    "BPX": "BPX",        # blood pressure, resting pulse
+    "BIOPRO": "BIOPRO",  # standard biochemistry: serum creatinine, uric acid
     "TCHOL": "TCHOL",    # total cholesterol
     "GLU": "GLU",        # fasting plasma glucose (fasting subsample)
     "SMQ": "SMQ",        # smoking questionnaire
@@ -138,11 +138,11 @@ def build():
 
         demo = mods["DEMO"][["SEQN", "RIDAGEYR", "RIAGENDR"]]
         m = demo.copy()
-        m = m.merge(mods["BMX"][["SEQN", "BMXBMI"]], on="SEQN", how="left")
+        m = m.merge(mods["BMX"][["SEQN", "BMXBMI", "BMXWAIST", "BMXHT"]], on="SEQN", how="left")
         bpx = mods["BPX"]
-        m = m.merge(bpx[["SEQN"] + [c for c in bpx.columns
+        m = m.merge(bpx[["SEQN", "BPXPLS"] + [c for c in bpx.columns
                                     if c.startswith(("BPXSY", "BPXDI"))]], on="SEQN", how="left")
-        m = m.merge(mods["BIOPRO"][["SEQN", "LBXSCR"]], on="SEQN", how="left")
+        m = m.merge(mods["BIOPRO"][["SEQN", "LBXSCR", "LBXSUA"]], on="SEQN", how="left")
         m = m.merge(mods["TCHOL"][["SEQN", "LBXTC"]], on="SEQN", how="left")
         m = m.merge(mods["GLU"][["SEQN", "LBXGLU"]], on="SEQN", how="left")
         m = m.merge(mods["SMQ"][["SEQN", "SMQ020", "SMQ040"]], on="SEQN", how="left")
@@ -175,6 +175,10 @@ def build():
     out["alcohol"] = np.nan
     out["physical_activity"] = np.nan
     out["family_history"] = np.nan
+    out["waist_circumference"] = df["BMXWAIST"].astype(float)
+    out["resting_pulse"] = avg_bp(df, ["BPXPLS"])
+    out["uric_acid"] = df["LBXSUA"].astype(float)
+    out["height"] = df["BMXHT"].astype(float)
     # Lab extras (diagnostic — NOT for the checkup-safe model; they define CKD).
     out["serum_creatinine"] = df["LBXSCR"].astype(float)
     out["egfr"] = df["egfr"].astype(float)
@@ -184,7 +188,8 @@ def build():
     # Median-impute the checkup feature columns so the training pipeline (SMOTE)
     # has clean input — mirrors how the other processed datasets are cleaned.
     # Fasting glucose is a NHANES subsample, so it is the most-imputed column.
-    for col in ["bmi", "systolic_bp", "diastolic_bp", "glucose", "cholesterol", "smoking"]:
+    for col in ["bmi", "systolic_bp", "diastolic_bp", "glucose", "cholesterol", "smoking",
+                "waist_circumference", "resting_pulse", "uric_acid", "height"]:
         if out[col].isnull().any():
             med = out[col].median()
             out[col] = out[col].fillna(med if pd.notna(med) else 0.0)

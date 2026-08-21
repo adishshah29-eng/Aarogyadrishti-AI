@@ -13,7 +13,9 @@ Why retrain here?
 
 For the downstream (chained) models, the upstream Diabetes/CKD risk features are
 regenerated with src.models.upstream.add_upstream_risks so the evaluated feature
-set matches what the model actually ships with.
+set matches what the model actually ships with. Each model's own feature-
+engineering helper (pulse pressure, interaction terms, ...) is applied the same
+way it is at training time, so the held-out feature set matches the shipped one.
 """
 import os
 import sys
@@ -30,22 +32,28 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, ROOT)
 
 from src.models.upstream import add_upstream_risks, UPSTREAM_FEATURES
+from src.models import diabetes_model, ckd_model, heart_model, hypertension_model
 
 DATA = os.path.join(ROOT, "data", "processed")
 MODELS = os.path.join(ROOT, "models")
 OUT = os.path.join(MODELS, "eval_cache.pkl")
 
-BASE_PARAMS = {
-    "n_estimators": 100, "max_depth": 4, "learning_rate": 0.1,
-    "random_state": 42, "eval_metric": "logloss",
-}
-HYPERTENSION_PARAMS = {**BASE_PARAMS, "subsample": 0.8, "colsample_bytree": 0.8}
-
 SCHEMAS = {
-    "Diabetes":      {"csv": "diabetes_clean.csv",     "pkl": "diabetes_model.pkl",     "target": "Outcome",        "params": BASE_PARAMS},
-    "CKD":           {"csv": "ckd_nhanes_clean.csv",   "pkl": "ckd_model.pkl",          "target": "classification", "params": BASE_PARAMS},
-    "Heart Disease": {"csv": "heart_clean.csv",        "pkl": "heart_model.pkl",        "target": "target",         "params": BASE_PARAMS},
-    "Hypertension":  {"csv": "hypertension_clean.csv", "pkl": "hypertension_model.pkl", "target": "cardio",         "params": HYPERTENSION_PARAMS},
+    "Diabetes":      {"csv": "diabetes_nhanes_clean.csv", "pkl": "diabetes_model.pkl",
+                       "target": "Outcome",        "params": diabetes_model.XGB_PARAMS,
+                       "engineer": diabetes_model._engineer},
+    "CKD":           {"csv": "ckd_nhanes_clean.csv",      "pkl": "ckd_model.pkl",
+                       "target": "classification", "params": {
+                           'n_estimators': 100, 'max_depth': 4, 'learning_rate': 0.1,
+                           'random_state': 42, 'eval_metric': 'logloss',
+                           'monotone_constraints': ckd_model.SAFE_MONOTONIC},
+                       "engineer": ckd_model._engineer},
+    "Heart Disease": {"csv": "heart_clean.csv",           "pkl": "heart_model.pkl",
+                       "target": "target",         "params": {**heart_model.XGB_PARAMS, 'monotone_constraints': heart_model.CHAINED_MONOTONIC},
+                       "engineer": heart_model._engineer},
+    "Hypertension":  {"csv": "hypertension_clean.csv",    "pkl": "hypertension_model.pkl",
+                       "target": "cardio",         "params": {**hypertension_model.XGB_PARAMS, 'monotone_constraints': hypertension_model.CHAINED_MONOTONIC},
+                       "engineer": hypertension_model._engineer},
 }
 
 cache = {}
@@ -60,6 +68,10 @@ for name, cfg in SCHEMAS.items():
     # the raw processed CSV — regenerate them so the feature set matches ship.
     if any(f in UPSTREAM_FEATURES for f in feats) and not set(UPSTREAM_FEATURES).issubset(df.columns):
         df = add_upstream_risks(df)
+
+    # Derive each model's engineered features (pulse pressure, interaction
+    # terms, ...) the same way train_and_evaluate() does, so `feats` resolves.
+    df = cfg["engineer"](df)
 
     if target not in df.columns:
         candidates = [c for c in df.columns if c.lower() == target.lower()]

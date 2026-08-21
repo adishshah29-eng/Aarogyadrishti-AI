@@ -7,14 +7,18 @@ Kaggle 100k dataset whose glucose column contained only 18 discrete values,
 producing non-monotonic tree artifacts (e.g. glucose=158 predicting 4% risk).
 NHANES glucose has 198 unique real clinical measurements.
 
-Checkup-safe feature set (8 features): age, sex, bmi, systolic_bp,
-diastolic_bp, glucose, cholesterol, smoking.
+Checkup-safe feature set (14 features): the original 8 (age, sex, bmi,
+systolic_bp, diastolic_bp, glucose, cholesterol, smoking) plus 4 additional
+NHANES measurements (waist_circumference, resting_pulse, uric_acid,
+cigs_per_day) and 2 engineered features (pulse_pressure,
+age_glucose_interaction) — see src/models/feature_engineering.py.
 
 Monotonic constraints enforce clinically correct feature directions:
-age (+1), bmi (+1), systolic_bp (+1), glucose (+1) — higher values always
-increase predicted risk.  sex, diastolic_bp, cholesterol, smoking are
-unconstrained (0) because their relationship with diabetes risk is
-non-directional or context-dependent.
+age, bmi, systolic_bp, glucose, waist_circumference, resting_pulse,
+uric_acid, cigs_per_day, pulse_pressure, age_glucose_interaction are all
++1 (higher always increases predicted risk).  sex, diastolic_bp,
+cholesterol, smoking are unconstrained (0) because their relationship with
+diabetes risk is non-directional or context-dependent.
 """
 import os
 import pandas as pd
@@ -25,17 +29,30 @@ from imblearn.over_sampling import SMOTE
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, confusion_matrix
 
+from src.models.feature_engineering import add_pulse_pressure, add_age_glucose_interaction
+
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DATA_PROCESSED = os.path.join(PROJECT_ROOT, "data", "processed")
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
 
-CHECKUP_SAFE_FEATURES = [
+RAW_FEATURES = [
     'age', 'sex', 'bmi', 'systolic_bp', 'diastolic_bp',
     'glucose', 'cholesterol', 'smoking',
+    'waist_circumference', 'resting_pulse', 'uric_acid', 'cigs_per_day',
 ]
+ENGINEERED_FEATURES = ['pulse_pressure', 'age_glucose_interaction']
+CHECKUP_SAFE_FEATURES = RAW_FEATURES + ENGINEERED_FEATURES
 
-# age↑  sex(any)  bmi↑  sysBP↑  diaBP(any)  glucose↑  chol(any)  smoking(any)
-MONOTONIC_CONSTRAINTS = (1, 0, 1, 1, 0, 1, 0, 0)
+
+def _engineer(df: pd.DataFrame) -> pd.DataFrame:
+    df = add_pulse_pressure(df)
+    df = add_age_glucose_interaction(df)
+    return df
+
+
+# age↑ sex(any) bmi↑ sysBP↑ diaBP(any) glucose↑ chol(any) smoking(any)
+# waist↑ pulse↑ uric_acid↑ cigs↑ pulse_pressure↑ age_glucose↑
+MONOTONIC_CONSTRAINTS = (1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1)
 
 XGB_PARAMS = {
     'n_estimators': 200,
@@ -60,6 +77,7 @@ def train_and_evaluate():
             "Run scripts/build_diabetes_nhanes.py first."
         )
     df = pd.read_csv(data_path)
+    df = _engineer(df)
 
     target_col = 'Outcome'
     X = df[CHECKUP_SAFE_FEATURES]
@@ -145,11 +163,12 @@ def predict_risk(patient_df) -> float:
     features = model_data['features']
     medians = model_data['medians']
 
-    for col in features:
+    for col in RAW_FEATURES:
         if col not in df.columns:
             df[col] = medians[col]
         else:
             df[col] = df[col].fillna(medians[col])
+    df = _engineer(df)
 
     df_feats = df[features]
     probs = model.predict_proba(df_feats)
@@ -163,11 +182,12 @@ def predict_risk_batch(patient_df) -> pd.DataFrame:
     features = model_data['features']
     medians = model_data['medians']
 
-    for col in features:
+    for col in RAW_FEATURES:
         if col not in df.columns:
             df[col] = medians[col]
         else:
             df[col] = df[col].fillna(medians[col])
+    df = _engineer(df)
 
     df_feats = df[features]
     probs = model.predict_proba(df_feats)[:, 1]

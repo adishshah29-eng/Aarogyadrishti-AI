@@ -62,16 +62,17 @@ def _read(name):
 def build_cohort():
     demo = _read("DEMO_L")[["SEQN", "RIDAGEYR", "RIAGENDR"]]
     df = demo.copy()
-    df = df.merge(_read("BMX_L")[["SEQN", "BMXBMI"]], on="SEQN", how="left")
+    df = df.merge(_read("BMX_L")[["SEQN", "BMXBMI", "BMXWAIST", "BMXHT"]], on="SEQN", how="left")
     bpxo = _read("BPXO_L")
     sy = [c for c in bpxo.columns if c.startswith("BPXOSY")]
     di = [c for c in bpxo.columns if c.startswith("BPXODI")]
-    df = df.merge(bpxo[["SEQN"] + sy + di], on="SEQN", how="left")
-    df = df.merge(_read("BIOPRO_L")[["SEQN", "LBXSCR"]], on="SEQN", how="left")
+    pls = [c for c in bpxo.columns if c.startswith("BPXOPLS")]
+    df = df.merge(bpxo[["SEQN"] + sy + di + pls], on="SEQN", how="left")
+    df = df.merge(_read("BIOPRO_L")[["SEQN", "LBXSCR", "LBXSUA"]], on="SEQN", how="left")
     df = df.merge(_read("TCHOL_L")[["SEQN", "LBXTC"]], on="SEQN", how="left")
     df = df.merge(_read("GLU_L")[["SEQN", "LBXGLU"]], on="SEQN", how="left")
     df = df.merge(_read("GHB_L")[["SEQN", "LBXGH"]], on="SEQN", how="left")
-    df = df.merge(_read("SMQ_L")[["SEQN", "SMQ020", "SMQ040"]], on="SEQN", how="left")
+    df = df.merge(_read("SMQ_L")[["SEQN", "SMQ020", "SMQ040", "SMD650"]], on="SEQN", how="left")
     df = df.merge(_read("ALB_CR_L")[["SEQN", "URDACT"]], on="SEQN", how="left")
     df = df.merge(_read("DIQ_L")[["SEQN", "DIQ010"]], on="SEQN", how="left")
     df = df.merge(_read("BPQ_L")[["SEQN", "BPQ020"]], on="SEQN", how="left")
@@ -93,6 +94,14 @@ def build_cohort():
     feats["glucose"] = df["LBXGLU"].astype(float)
     feats["cholesterol"] = df["LBXTC"].astype(float)
     feats["smoking"] = derive_smoking(df["SMQ020"], df["SMQ040"])
+    feats["waist_circumference"] = df["BMXWAIST"].astype(float)
+    feats["height"] = df["BMXHT"].astype(float)
+    feats["resting_pulse"] = avg_bp(df, pls)
+    feats["uric_acid"] = df["LBXSUA"].astype(float)
+    feats["cigs_per_day"] = pd.to_numeric(df["SMD650"], errors="coerce")
+    feats.loc[feats["smoking"] == 0.0, "cigs_per_day"] = feats.loc[feats["smoking"] == 0.0, "cigs_per_day"].fillna(0.0)
+    feats["heartRate"] = feats["resting_pulse"]
+    feats["prevalentHyp"] = np.where(df["BPQ020"] == 1, 1.0, np.where(df["BPQ020"] == 2, 0.0, np.nan))
 
     # ── Independent ground-truth labels ──
     ghb = df["LBXGH"]
@@ -201,7 +210,7 @@ def write_report(results):
             "\"LOW\" risk). Scoring the Diabetes model on this cohort would "
             "therefore be in-sample evaluation, not external validation — its "
             "honest out-of-sample estimate is the 5-fold CV in "
-            "`reports/baseline_metrics.md` (Accuracy 80.67%, AUC 0.8475).\n\n"
+            "`reports/baseline_metrics.md` (Accuracy 81.19%, AUC 0.8624).\n\n"
         )
         f.write("## Results\n\n")
         f.write("| Disease | N (labelled) | Prevalence | AUC | Accuracy | F1 | Confusion (TN,FP,FN,TP) |\n")
