@@ -7,9 +7,26 @@ from imblearn.over_sampling import SMOTE
 from sklearn.model_selection import KFold
 from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, confusion_matrix
 
+from src.models.feature_engineering import add_pulse_pressure, add_bmi_age_interaction
+
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DATA_PROCESSED = os.path.join(PROJECT_ROOT, "data", "processed")
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
+
+RAW_CHECKUP_FEATURES = ['age', 'sex', 'bmi', 'systolic_bp', 'diastolic_bp', 'glucose', 'cholesterol', 'smoking',
+                         'waist_circumference', 'resting_pulse', 'uric_acid']
+ENGINEERED_FEATURES = ['pulse_pressure', 'bmi_age_interaction']
+
+# Monotonic constraints (checkup-safe, 13 features):
+# age↑ sex(any) bmi↑ sysBP↑ diaBP(any) glucose↑ chol(any) smoking(any)
+# waist↑ pulse↑ uric_acid↑ pulse_pressure↑ bmi_age↑
+SAFE_MONOTONIC = (1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1)
+
+
+def _engineer(df: pd.DataFrame) -> pd.DataFrame:
+    df = add_pulse_pressure(df)
+    df = add_bmi_age_interaction(df)
+    return df
 
 def train_and_evaluate():
     # Load processed data. Prefer the NHANES-derived cohort (5k+ adults, both
@@ -21,12 +38,13 @@ def train_and_evaluate():
     if not os.path.exists(data_path):
         raise FileNotFoundError(f"Cleaned CKD data not found at {data_path}")
     df = pd.read_csv(data_path)
+    df = _engineer(df)
 
     # Define features. The checkup-safe set is non-invasive routine inputs only.
     # 'serum_creatinine' is included in the baseline for an illustrative
     # "with-lab" comparison, but it is LEAKY (eGFR — hence the label — is derived
     # from it), so it is deliberately excluded from the shipped checkup-safe model.
-    checkup_safe_features = ['age', 'sex', 'bmi', 'systolic_bp', 'diastolic_bp', 'glucose', 'cholesterol', 'smoking']
+    checkup_safe_features = RAW_CHECKUP_FEATURES + ENGINEERED_FEATURES
     baseline_features = checkup_safe_features + (['serum_creatinine'] if 'serum_creatinine' in df.columns else [])
     target_col = 'classification'
     
@@ -47,30 +65,39 @@ def train_and_evaluate():
     }
     
     # XGBoost hyperparameters
+    base_params = {
+        'n_estimators': 100,
+        'max_depth': 4,
+        'learning_rate': 0.1,
+        'random_state': 42,
+        'eval_metric': 'logloss',
+        'monotone_constraints': SAFE_MONOTONIC + ((1,) if 'serum_creatinine' in baseline_features else ()),
+    }
     xgb_params = {
         'n_estimators': 100,
         'max_depth': 4,
         'learning_rate': 0.1,
         'random_state': 42,
-        'eval_metric': 'logloss'
+        'eval_metric': 'logloss',
+        'monotone_constraints': SAFE_MONOTONIC,
     }
-    
+
     # 5-fold CV for Baseline (Full-feature) Model
     print("Training Baseline Model (5-fold CV)...")
     for train_idx, val_idx in kf.split(X_base):
         X_train, X_val = X_base.iloc[train_idx], X_base.iloc[val_idx]
         y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
-        
+
         # Apply SMOTE to training split only
         smote = SMOTE(random_state=42)
         X_train_res, y_train_res = smote.fit_resample(X_train, y_train)
-        
-        model = XGBClassifier(**xgb_params)
+
+        model = XGBClassifier(**base_params)
         model.fit(X_train_res, y_train_res)
-        
+
         preds = model.predict(X_val)
         probs = model.predict_proba(X_val)[:, 1]
-        
+
         metrics['baseline']['accuracy'].append(accuracy_score(y_val, preds))
         metrics['baseline']['auc'].append(roc_auc_score(y_val, probs))
         metrics['baseline']['f1'].append(f1_score(y_val, preds))
@@ -174,16 +201,17 @@ def predict_risk(patient_df) -> float:
     features = model_data['features']
     medians = model_data['medians']
     
-    # Impute missing features using training medians
-    for col in features:
+    # Impute missing raw features using training medians, then derive engineered ones
+    for col in RAW_CHECKUP_FEATURES:
         if col not in df.columns:
             df[col] = medians[col]
         else:
             df[col] = df[col].fillna(medians[col])
-            
+    df = _engineer(df)
+
     # Extract only features model was trained on
     df_feats = df[features]
-    
+
     # Predict probability
     probs = model.predict_proba(df_feats)
     return float(probs[0, 1])
@@ -202,13 +230,14 @@ def predict_risk_batch(patient_df) -> pd.DataFrame:
     features = model_data['features']
     medians = model_data['medians']
     
-    # Impute missing features
-    for col in features:
+    # Impute missing raw features, then derive engineered ones
+    for col in RAW_CHECKUP_FEATURES:
         if col not in df.columns:
             df[col] = medians[col]
         else:
             df[col] = df[col].fillna(medians[col])
-            
+    df = _engineer(df)
+
     # Extract features
     df_feats = df[features]
     

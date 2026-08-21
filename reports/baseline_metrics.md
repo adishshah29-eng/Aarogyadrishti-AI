@@ -10,50 +10,70 @@ All numbers below are **5-fold cross-validation** with **SMOTE applied only on t
 
 ## 1. Diabetes Model Performance
 
-**Data source (upgraded):** the diabetes model now trains on the 100k-row [Diabetes Prediction dataset](https://www.kaggle.com/datasets/iammustafatz/diabetes-prediction-dataset) (CC0), replacing the legacy female-only Pima set. After dropping exact duplicates, restricting to adults (age ≥ 18), and removing the handful of `Other`-gender rows, **79,444 records** remain (≈48k female / 31k male). The outcome is imbalanced at **~10.6% positive**. `sex` is now a genuine, non-degenerate feature.
+**Data source (upgraded again — P0 fix):** the diabetes model now trains on **NHANES 2021-2023** (7,912 adults, both sexes, ~15.5% positive), built by `scripts/build_diabetes_nhanes.py`, replacing the 100k-row Kaggle synthetic dataset used previously. The Kaggle set's `glucose` column contained only **18 discrete values** (evidence of synthetic generation — real clinical measurements have hundreds of unique values), which produced **non-monotonic XGBoost tree artifacts**: a patient with fasting glucose = 158 mg/dL (diagnostic for diabetes; >126 mg/dL is the clinical threshold) was scored **4.1% risk ("LOW")** by the old model, with SHAP calling the glucose value "excellent, drastically lowering risk." NHANES glucose has **198 unique values** from real clinical measurements, and the model now additionally uses **monotonic constraints** (`age↑, bmi↑, systolic_bp↑, glucose↑`) to guarantee higher glucose can never lower predicted risk. The same patient (glucose 158) is now scored **94.5%**, and predictions are verified monotonically increasing across the full glucose range.
 
-| Model Version | Accuracy | ROC AUC | F1-Score | Confusion Matrix (TN, FP, FN, TP) |
-|---|---|---|---|---|
-| **Baseline (Full-feature, +HbA1c & comorbidity labels)** | **96.47%** | **0.9723** | **0.8031** | TN: 70907, FP: 137, FN: 2671, TP: 5729 |
-| **Checkup-Safe (SHIPS)** | 88.80% | 0.9130 | 0.5534 | TN: 65035, FP: 6009, FN: 2886, TP: 5514 |
+Label: HbA1c ≥ 6.5% **or** doctor-diagnosed diabetes (DIQ010 == 1) — the clinically standard ADA definition.
+
+**Feature expansion (P1, 2026-08-21):** the checkup-safe feature set grew from 8 to **14 features**. Added 4 raw NHANES measurements — `waist_circumference` (BMXWAIST), `resting_pulse` (avg of BPXOPLS1-3), `uric_acid` (LBXSUA), `cigs_per_day` (SMD650, 0 for non-smokers) — plus 2 engineered features from `src/models/feature_engineering.py`: `pulse_pressure` (systolic − diastolic) and `age_glucose_interaction` (age × glucose, scaled). All new raw features carry `+1` monotonic constraints (higher waist, pulse, uric acid, and smoking dose all increase predicted risk), consistent with the literature linking each to insulin resistance / T2DM risk.
+
+Full feature list (14): `age, sex, bmi, systolic_bp, diastolic_bp, glucose, cholesterol, smoking, waist_circumference, resting_pulse, uric_acid, cigs_per_day, pulse_pressure, age_glucose_interaction`.
+
+| Model Version | Accuracy | ROC AUC | F1-Score |
+|---|---|---|---|
+| Checkup-Safe (8 features, previous) | 80.67% | 0.8475 | 0.5048 |
+| **Checkup-Safe (14 features, SHIPS)** | 81.19% | 0.8624 | 0.5206 |
 
 ### Tradeoff Analysis & Observations
-* **Feature set (shipped)**: `age`, `sex`, `bmi`, `glucose`, `smoking`. The baseline additionally uses `HbA1c_level`, `hypertension`, and `heart_disease`. `HbA1c` is a diagnostic marker (it largely *defines* diabetes, hence the near-96% baseline) and is deliberately excluded from the checkup-safe model; the two comorbidity labels are excluded to avoid circularity in the upstream→downstream chain.
-* **AUC vs F1**: the checkup-safe AUC of **0.913** is strong (up from 0.83 on the old female-only set). The lower **F1 (0.553)** is a consequence of the 10.6% class imbalance at the default 0.5 threshold — with far more negatives, false positives depress precision even though ranking (AUC) is good. Threshold tuning would trade this off for a deployment.
-* **Population validity**: the key win is that scores are now validated across **both sexes**, not extrapolated from a female-only cohort.
+* **Why accuracy/AUC look lower than the old 88.8%/0.913 (pre-P0)**: those numbers came from the synthetic Kaggle dataset's artificially clean, discretized glucose bins, which made classification easier but produced clinically wrong individual predictions. The NHANES numbers are **honest performance on real clinical data** — comparable to published NHANES-based diabetes screening literature.
+* **The critical fix**: this is not primarily an accuracy story — the old model's 4.1%-for-glucose=158 was a **correctness failure**, not a calibration nuance. The monotonic constraint + real-valued glucose column together eliminate the artifact class, not just this one case. Re-verified after the feature expansion: glucose=158 now scores **97.5%** risk.
+* **Feature expansion gain**: AUC +0.015, Accuracy +0.5pp, F1 +0.016 over the 8-feature model — waist circumference and uric acid add real signal beyond BMI/glucose alone.
+* **Population validity**: both sexes represented; real clinical fasting glucose subsample (NHANES `GLU_L`).
 
 ---
 
 ## 2. Chronic Kidney Disease (CKD) Model Performance
 
-**Data source (upgraded):** the CKD model now trains on an **NHANES 2017–2018** cohort of **5,154 adults** (2,673 female / 2,481 male), replacing the 400-row UCI set. CKD is labelled by clinical criteria: **eGFR < 60** (race-free CKD-EPI 2021 from serum creatinine) **or** urine **ACR ≥ 30** (KDIGO markers) → 18.8% positive. Built by `scripts/build_ckd_nhanes.py`.
+**Data source:** the CKD model trains on an **NHANES 2017–2018** cohort of **5,154 adults** (2,673 female / 2,481 male), replacing the 400-row UCI set. CKD is labelled by clinical criteria: **eGFR < 60** (race-free CKD-EPI 2021 from serum creatinine) **or** urine **ACR ≥ 30** (KDIGO markers) → 18.8% positive. Built by `scripts/build_ckd_nhanes.py`.
 
-| Model Version | Accuracy | ROC AUC | F1-Score | Confusion Matrix (TN, FP, FN, TP) |
-|---|---|---|---|---|
-| **Baseline (+ serum creatinine, illustrative/leaky)** | 87.14% | 0.8190 | 0.6191 | TN: 3953, FP: 230, FN: 433, TP: 538 |
-| **Checkup-Safe (SHIPS)** | 79.10% | 0.7424 | 0.4564 | TN: 3624, FP: 559, FN: 518, TP: 453 |
+**P0 update:** added monotonic constraints (`age↑, bmi↑, systolic_bp↑, glucose↑`) — same pattern as the diabetes fix — to guarantee these four features can never lower predicted risk, closing off the same class of tree artifact that caused the diabetes glucose=158 bug.
+
+**Feature expansion (P1, 2026-08-21):** grew from 8 to **13 features**, adding `waist_circumference`, `resting_pulse`, `uric_acid` (same NHANES source files as the diabetes expansion, pulled from the 2017-2018 cycle instead) plus 2 engineered features: `pulse_pressure` and `bmi_age_interaction`. All new features carry `+1` monotonic constraints.
+
+Full feature list (13): `age, sex, bmi, systolic_bp, diastolic_bp, glucose, cholesterol, smoking, waist_circumference, resting_pulse, uric_acid, pulse_pressure, bmi_age_interaction`.
+
+| Model Version | Accuracy | ROC AUC | F1-Score |
+|---|---|---|---|
+| Checkup-Safe (8 features, previous) | 79.32% | 0.7492 | 0.4674 |
+| **Checkup-Safe (13 features, SHIPS)** | 79.45% | 0.7666 | 0.4848 |
 
 ### Interpretation
-* **The AUC "dropped" 0.89 → 0.74 — this is the model becoming honest.** The old 0.89 (and the 0.998 full-panel baseline) came from a **400-row set with near-perfect separation** — an over-optimistic small-sample artefact. On 5,154 real adults the checkup-safe AUC of **0.74** is a realistic estimate of predicting CKD markers from routine vitals, with **clinically correct** relationships (risk rises with age, blood pressure, glucose).
-* **Feature set (shipped):** `age, sex, bmi, systolic_bp, diastolic_bp, glucose, cholesterol, smoking`. The `serum_creatinine` baseline is shown only for reference — it is **leaky** (eGFR, hence the label, is derived from it), so it is excluded from the shipped model, exactly like HbA1c for diabetes.
-* **F1 (0.46)** is low because the outcome is imbalanced (~19% positive) at the default 0.5 threshold; AUC is the meaningful discrimination metric here.
+* **AUC (0.767) is a realistic estimate** of predicting CKD markers from routine vitals on 5,154 real adults, with monotonic guarantees that risk rises with age, blood pressure, glucose, waist circumference, pulse, and uric acid.
+* **Feature expansion gain**: AUC +0.017 over the 8-feature model — CKD had the most headroom of the four models, and uric acid (a known independent CKD risk marker) contributes meaningfully.
+* **Feature set (shipped):** see full list above. `serum_creatinine` is excluded from the shipped model — it is **leaky** (eGFR, hence the label, is derived from it) — exactly like HbA1c for diabetes.
+* **F1 (0.48)** is low because the outcome is imbalanced (~19% positive) at the default 0.5 threshold; AUC is the meaningful discrimination metric here.
 
 ---
 
 ## 3. Heart Disease Model Performance
 
-**Data source (upgraded):** the heart model now trains on the **Framingham Heart Study** dataset (4,240 records, both sexes, 10-year CHD outcome, ~15% positive), replacing the 1,025-row Kaggle/Cleveland set. The old set's checkup features (age, BP, cholesterol) were **inversely** correlated with its label (age corr −0.23, sysBP −0.14, cholesterol −0.10), so it produced clinically backwards predictions — a high-risk 62-year-old scored ~15%. Framingham's correlations are correct (age +0.23, sysBP +0.22, cholesterol +0.08); the same patient now scores ~68%.
+**Data source:** the heart model trains on the **Framingham Heart Study** dataset (4,240 records, both sexes, 10-year CHD outcome, ~15% positive), replacing the 1,025-row Kaggle/Cleveland set whose checkup features were inversely correlated with its label.
 
-| Model Version | Accuracy | ROC AUC | F1-Score | Confusion Matrix (TN, FP, FN, TP) |
-|---|---|---|---|---|
-| **Baseline (Full-feature)** | 81.93% | 0.6887 | 0.2777 | TN: 3326, FP: 270, FN: 496, TP: 148 |
-| **Isolated (Checkup-safe)** | 81.37% | 0.6815 | 0.2743 | TN: 3300, FP: 296, FN: 494, TP: 150 |
-| **Chained (Checkup-safe, SHIPS)** | 81.27% | 0.6825 | 0.2868 | TN: 3286, FP: 310, FN: 484, TP: 160 |
+**P0 update:** added monotonic constraints for the shipped chained feature set (`age↑, bmi↑, sysBP↑, glucose↑, chol↑, smoking↑, diabetes_risk↑, ckd_risk↑`), applied only to the chained variant (baseline/isolated use different feature counts and are unconstrained comparison points).
+
+**Feature expansion (P1, 2026-08-21):** the Framingham dataset already carries 4 clinically relevant columns that were unused in the shipped model — promoted `heartRate`, `cigsPerDay`, `prevalentHyp` (prior hypertension diagnosis), and `BPMeds` (on BP medication) into the isolated/chained feature sets, plus 2 engineered features: `pulse_pressure` and `mean_arterial_pressure`. Grew from 10 to **16 chained features**, all monotonically constrained.
+
+Full chained feature list (16): `age, sex, bmi, systolic_bp, diastolic_bp, glucose, cholesterol, smoking, heartRate, cigsPerDay, prevalentHyp, BPMeds, pulse_pressure, mean_arterial_pressure, diabetes_risk, ckd_risk`.
+
+| Model Version | Accuracy | ROC AUC | F1-Score |
+|---|---|---|---|
+| Chained (10 features, previous) | 77.36% | 0.6863 | 0.3200 |
+| **Chained (16 features, SHIPS)** | 77.00% | 0.6988 | 0.3411 |
 
 ### Interpretation (important)
-* **The AUC dropped from 0.968 → 0.68 — and that is the model getting _better_, not worse.** The old 0.968 was **inflated by a broken dataset**: the model fit clinically inverted labels almost perfectly ("confidently wrong"). The new **0.68 is honest** — predicting *10-year future* CHD from routine checkup features is a genuinely hard task (this AUC is in line with the published Framingham literature), and the predictions now move in the clinically correct direction.
-* **Accuracy (81%) is dominated by class imbalance** (~85% negative); AUC and recall are the meaningful metrics here, and the model deliberately trades precision for catching positives (SMOTE), hence the low F1.
-* **Chaining effect: ~0.00% accuracy / +0.001 AUC** — essentially neutral now (the vitals already carry the signal).
+* Predicting *10-year future* CHD from routine checkup features is a genuinely hard task; **AUC 0.699** is in line with published Framingham literature, and monotonic constraints now guarantee predictions move in the clinically correct direction for age, BP, glucose, cholesterol, smoking, resting heart rate, smoking dose, hypertension history, BP medication, and the upstream diabetes/CKD risk scores.
+* **Feature expansion gain**: AUC +0.013, F1 +0.021, at a small accuracy cost (−0.36pp) — expected, since the added features shift more borderline cases into the positive prediction bucket (visible in the confusion matrix), improving recall on the minority class.
+* **Accuracy is dominated by class imbalance** (~85% negative); AUC and recall are the meaningful metrics here, and the model deliberately trades precision for catching positives (SMOTE), hence the low F1.
+* `prevalentHyp` and `BPMeds` require the UI to ask two new yes/no questions ("diagnosed with hypertension?", "on BP medication?") — no lab test needed.
 
 ---
 
@@ -61,25 +81,34 @@ All numbers below are **5-fold cross-validation** with **SMOTE applied only on t
 
 The Hypertension (cardiovascular) dataset contains 70,000 patient records (35,021 negative, 34,979 positive). The shipped model is **chained** on `diabetes_risk` and `ckd_risk`.
 
-| Model Version | Accuracy | ROC AUC | F1-Score | Confusion Matrix (TN, FP, FN, TP) |
-|---|---|---|---|---|
-| **Baseline (Full-feature)** | 73.60% | 0.8029 | 0.7247 | TN: 27206, FP: 7815, FN: 10662, TP: 24317 |
-| **Isolated (Checkup-safe)** | 73.61% | 0.8024 | 0.7250 | TN: 27179, FP: 7842, FN: 10631, TP: 24348 |
-| **Chained (Checkup-safe, SHIPS)** | **73.71%** | 0.8028 | **0.7254** | TN: 27276, FP: 7745, FN: 10661, TP: 24318 |
+**P0 update:** added monotonic constraints for the shipped chained feature set (`age↑, bmi↑, sysBP↑, diaBP↑, chol↑, glucose↑, dia_risk↑, ckd_risk↑`; sex/smoking/alcohol/activity unconstrained), applied only to the chained variant.
 
-### Chaining Effect
-* **Chained − Isolated: +0.10% accuracy, ~0.0004 ROC AUC.** For Hypertension the chaining effect is essentially neutral: the dataset already carries rich vitals (BMI, systolic/diastolic BP, glucose), so the upstream risk features are largely redundant.
-* **Unit note:** this dataset's `cholesterol`/`glucose` are recorded as ordinal categories (1–3); they are now mapped to representative mg/dL values during cleaning so the feature is on the same scale the dashboard sends (see audit finding C1).
+**Feature expansion (P1, 2026-08-21):** this dataset has the least headroom of the four — no pulse, waist, or continuous lab values, and ordinal (not continuous) cholesterol/glucose. Added the only two features derivable from existing inputs: `pulse_pressure` and `mean_arterial_pressure`. Grew from 12 to **14 chained features**.
+
+Full chained feature list (14): `age, sex, bmi, systolic_bp, diastolic_bp, cholesterol, glucose, smoking, alcohol, physical_activity, pulse_pressure, mean_arterial_pressure, diabetes_risk, ckd_risk`.
+
+| Model Version | Accuracy | ROC AUC | F1-Score |
+|---|---|---|---|
+| Chained (12 features, previous) | 73.34% | 0.7998 | 0.7214 |
+| **Chained (14 features, SHIPS)** | 73.36% | 0.8004 | 0.7227 |
+
+### Interpretation
+* **Feature expansion gain is marginal** (AUC +0.0006, Accuracy +0.02pp) — as expected, since pulse pressure and MAP are linear combinations of systolic/diastolic BP, which the tree model could already approximate via splits on those two raw features. This confirms the plan's prediction that this dataset needs new *source* data (e.g. an NHANES-based rebuild with real pulse/waist/lab values), not more derived features from the same two BP columns, to meaningfully improve further.
+* **Unit note:** this dataset's `cholesterol`/`glucose` are recorded as ordinal categories (1–3); they are mapped to representative mg/dL values during cleaning so the feature is on the same scale the dashboard sends (see audit finding C1).
 
 ---
 
 ## Summary
 
-| Model | Ships as | CV Accuracy | CV ROC AUC | Chaining Δ Acc |
-|---|---|---|---|---|
-| Diabetes | Checkup-safe (mixed-sex 100k) | 88.80% | 0.9130 | — |
-| CKD | Checkup-safe (both-sex NHANES 5.1k) | 79.10% | 0.7424 | — |
-| Heart Disease | Chained checkup-safe (Framingham) | 80.99% | 0.6770 | −0.38% |
-| Hypertension | Chained checkup-safe | 73.66% | 0.8025 | +0.05% |
+| Model | Ships as | Features | CV Accuracy | CV ROC AUC | CV F1 |
+|---|---|---|---|---|---|
+| Diabetes | Checkup-safe (NHANES 2021-2023, monotonic) | 14 | 81.19% | 0.8624 | 0.5206 |
+| CKD | Checkup-safe (NHANES 2017-2018, monotonic) | 13 | 79.45% | 0.7666 | 0.4848 |
+| Heart Disease | Chained checkup-safe (Framingham, monotonic) | 16 | 77.00% | 0.6988 | 0.3411 |
+| Hypertension | Chained checkup-safe (monotonic) | 14 | 73.36% | 0.8004 | 0.7227 |
 
-The chaining gain is genuine but modest and concentrated in Heart Disease; see `reports/chaining_results.md` for a complementary ablation on two independent comorbidity cohorts.
+**P0 fix (2026-08-20):** all four models now use **monotonic constraints** on their clinically-directional features (age, BMI, systolic BP, glucose always increase risk), and the diabetes model was moved from the synthetic 100k Kaggle dataset to **real NHANES 2021-2023 clinical data**. This closes a critical correctness bug where a patient with diagnostic-level fasting glucose (158 mg/dL) was scored 4.1% ("LOW") risk by the old model — the synthetic dataset's glucose column had only 18 discrete values, producing non-monotonic tree splits.
+
+**P1 feature expansion (2026-08-21):** every model's feature set was widened using additional NHANES measurements already on disk (waist circumference, resting pulse, uric acid, smoking dose), promoted-but-previously-unused Framingham columns (heart rate, cigarettes/day, prior hypertension, BP medication), and derived features (`src/models/feature_engineering.py`: pulse pressure, mean arterial pressure, waist-to-height ratio, age×glucose and BMI×age interactions). AUC improved for Diabetes (+0.015), CKD (+0.017, the largest gain), and Heart Disease (+0.013); Hypertension gained only marginally (+0.0006) since its source dataset lacks the raw measurements (pulse, waist, continuous labs) needed for the new features to add information beyond what the model could already infer from BP alone — a dataset swap, not further feature engineering, is the next lever there. See `reports/external_validation.md` for out-of-sample verification, which shows the same pattern: CKD AUC 0.756→0.773, Heart AUC 0.746→0.763, Hypertension AUC 0.772→0.774.
+
+See `reports/chaining_results.md` for the upstream→downstream chaining ablation on Heart Disease and Hypertension.
