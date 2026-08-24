@@ -1,12 +1,21 @@
 """
-Hypertension / cardiovascular risk model (downstream / chained).
+Hypertension risk model (downstream / chained).
+
+Training cohort: NHANES 2021-2023 (8,139 adults, both sexes, ~36.3%
+positive), built by ``scripts/build_hypertension_nhanes.py``. This replaces
+the cardio/Kaggle dataset (70k rows), whose target ('cardio') was a broad
+self-reported cardiovascular-disease flag rather than hypertension
+specifically, and whose cholesterol/glucose were ordinal categories (1-3)
+rather than continuous lab values.
 
 Like the Heart Disease model, this consumes the upstream Diabetes and CKD
-risk scores as extra features (``diabetes_risk``, ``ckd_risk``). Because the
-hypertension dataset carries real BMI, blood-pressure and glucose values, the
-upstream risks computed for its rows vary meaningfully (rather than collapsing
-to an age proxy), so this is the dataset where chaining has the most signal to
-work with. Training measures the isolated-vs-chained delta explicitly.
+risk scores as extra features (``diabetes_risk``, ``ckd_risk``).
+
+NOTE: the cardio dataset's ``alcohol`` and ``physical_activity`` fields are
+NOT carried over — no NHANES alcohol-use or physical-activity module is
+available in this environment (see scripts/build_hypertension_nhanes.py), and
+no other shipped model consumes them, so keeping them would mean asking users
+a question whose answer is never actually used.
 """
 import os
 import sys
@@ -21,23 +30,24 @@ from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, confusion_m
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 from src.models.upstream import add_upstream_risks, UPSTREAM_FEATURES
 from src.models.feature_engineering import add_pulse_pressure, add_mean_arterial_pressure
+from src.models.tuned_params import load_tuned
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DATA_PROCESSED = os.path.join(PROJECT_ROOT, "data", "processed")
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
 
-# XGBoost hyperparameters (subsample for speed on 70k rows)
+# XGBoost hyperparameters
 XGB_PARAMS = {
-    'n_estimators': 100,
-    'max_depth': 4,
-    'learning_rate': 0.1,
+    **load_tuned('hypertension', {
+        'n_estimators': 100, 'max_depth': 4, 'learning_rate': 0.1,
+        'subsample': 0.8, 'colsample_bytree': 0.8,
+    }),
     'random_state': 42,
     'eval_metric': 'logloss',
-    'subsample': 0.8,
-    'colsample_bytree': 0.8,
 }
 
-RAW_ISOLATED_FEATURES = ['age', 'sex', 'bmi', 'systolic_bp', 'diastolic_bp', 'cholesterol', 'glucose', 'smoking', 'alcohol', 'physical_activity']
+RAW_ISOLATED_FEATURES = ['age', 'sex', 'bmi', 'systolic_bp', 'diastolic_bp', 'cholesterol', 'glucose', 'smoking',
+                          'waist_circumference', 'resting_pulse', 'uric_acid', 'cigs_per_day']
 ENGINEERED_FEATURES = ['pulse_pressure', 'mean_arterial_pressure']
 
 
@@ -47,10 +57,10 @@ def _engineer(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# Monotonic constraints for the shipped chained feature set (14 features):
-# age↑ sex(any) bmi↑ sysBP↑ diaBP↑ chol↑ glucose↑ smoking(any) alcohol(any) activity(any)
-# pulse_pressure↑ MAP↑ dia_risk↑ ckd_risk↑
-CHAINED_MONOTONIC = (1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1)
+# Monotonic constraints for the shipped chained feature set (16 features):
+# age↑ sex(any) bmi↑ sysBP↑ diaBP↑ chol↑ glucose↑ smoking(any)
+# waist↑ pulse↑ uric_acid↑ cigs↑ pulse_pressure↑ MAP↑ dia_risk↑ ckd_risk↑
+CHAINED_MONOTONIC = (1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1)
 
 
 def _run_cv(X, y, xgb_params=XGB_PARAMS, n_splits=5):
@@ -83,8 +93,13 @@ def _run_cv(X, y, xgb_params=XGB_PARAMS, n_splits=5):
 
 
 def train_and_evaluate():
-    # Load processed data
-    data_path = os.path.join(DATA_PROCESSED, "hypertension_clean.csv")
+    # Load processed data. Prefer the NHANES-derived cohort (both sexes,
+    # doctor-diagnosed hypertension label, continuous labs); fall back to the
+    # legacy cardio/Kaggle set if it has not been built yet.
+    data_path = os.path.join(DATA_PROCESSED, "hypertension_nhanes_clean.csv")
+    legacy = not os.path.exists(data_path)
+    if legacy:
+        data_path = os.path.join(DATA_PROCESSED, "hypertension_clean.csv")
     if not os.path.exists(data_path):
         raise FileNotFoundError(f"Cleaned hypertension data not found at {data_path}")
     df = pd.read_csv(data_path)
@@ -93,24 +108,22 @@ def train_and_evaluate():
     # Append genuine upstream risk scores so the model can chain on them.
     df = add_upstream_risks(df)
 
-    # Define feature sets
-    baseline_features = ['age', 'sex', 'bmi', 'systolic_bp', 'diastolic_bp', 'cholesterol', 'glucose', 'smoking', 'alcohol', 'physical_activity', 'height', 'weight']
+    # Define feature sets. Unlike Heart Disease, this dataset has no separate
+    # "full lab panel" beyond the checkup-safe set, so there is no meaningful
+    # baseline variant to compare against here.
     isolated_features = RAW_ISOLATED_FEATURES + ENGINEERED_FEATURES
     chained_features = isolated_features + UPSTREAM_FEATURES   # SHIPPED feature set
-    target_col = 'cardio'
+    target_col = 'Outcome' if not legacy else 'cardio'
 
     y = df[target_col]
 
-    print("Hypertension — Baseline (full-feature) 5-fold CV...")
-    m_base = _run_cv(df[baseline_features], y)
     print("Hypertension — Isolated checkup-safe 5-fold CV...")
     m_iso = _run_cv(df[isolated_features], y)
     print("Hypertension — Chained checkup-safe 5-fold CV...")
     chained_params = {**XGB_PARAMS, 'monotone_constraints': CHAINED_MONOTONIC}
     m_chain = _run_cv(df[chained_features], y, xgb_params=chained_params)
 
-    for label, m in [("Baseline (full-feature)", m_base),
-                     ("Isolated checkup-safe", m_iso),
+    for label, m in [("Isolated checkup-safe", m_iso),
                      ("Chained checkup-safe (SHIPS)", m_chain)]:
         print(f"\n=== Hypertension — {label} ===")
         print(f"Accuracy: {m['accuracy']:.4f}")
@@ -138,7 +151,7 @@ def train_and_evaluate():
     }, model_path)
     print(f"Saved chained checkup-safe Hypertension model to {model_path}")
 
-    return {'baseline': m_base, 'isolated': m_iso, 'chained': m_chain}
+    return {'isolated': m_iso, 'chained': m_chain}
 
 # --- HANDOFF PREDICTION INTERFACE ---
 

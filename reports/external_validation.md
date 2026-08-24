@@ -1,16 +1,15 @@
 # External Validation — NHANES August 2021-August 2023
 
-The CKD, Heart Disease, and Hypertension shipped models were tested on a cohort **none of them were trained on**: NHANES August 2021-August 2023, a nationally representative US survey of different people than any of their training datasets (CKD: NHANES 2017-2018; Heart: Framingham; Hypertension: cardio/Kaggle dataset). Ground-truth labels are derived independently of our models, from objective labs and doctor-diagnosis questionnaire answers (doctor-diagnosed hypertension/heart disease, eGFR + urine ACR for CKD) — never from our own predictions, so there is no circularity.
+The CKD and Heart Disease shipped models were tested on a cohort **neither was trained on**: NHANES August 2021-August 2023, a nationally representative US survey of different people than either training dataset (CKD: NHANES 2017-2018; Heart: Framingham). Ground-truth labels are derived independently of our models, from objective labs and doctor-diagnosis questionnaire answers (doctor-diagnosed heart disease, eGFR + urine ACR for CKD) — never from our own predictions, so there is no circularity.
 
-**Diabetes is excluded from this table.** As of the P0 monotonic-constraints fix, the Diabetes model now trains directly on this same NHANES 2021-2023 cohort (replacing the synthetic 100k Kaggle dataset that caused a fasting-glucose=158 mg/dL patient to be scored 4.1% "LOW" risk). Scoring the Diabetes model on this cohort would therefore be in-sample evaluation, not external validation — its honest out-of-sample estimate is the 5-fold CV in `reports/baseline_metrics.md` (Accuracy 81.19%, AUC 0.8624).
+**Diabetes and Hypertension are excluded from this table.** As of the P0 monotonic-constraints fix and the P1 hypertension dataset swap, both models now train directly on this same NHANES 2021-2023 cohort — Diabetes replacing the synthetic 100k Kaggle dataset that caused a fasting-glucose=158 mg/dL patient to be scored 4.1% "LOW" risk, Hypertension replacing the cardio/Kaggle dataset's broad self-reported cardiovascular-disease label with a real doctor-diagnosed-hypertension one. Scoring either model on this cohort would therefore be in-sample evaluation, not external validation — their honest out-of-sample estimates are the 5-fold CV numbers in `reports/baseline_metrics.md` (Diabetes: Accuracy 81.19%, AUC 0.8624; Hypertension: Accuracy 73.20%, AUC 0.8077).
 
 ## Results
 
 | Disease | N (labelled) | Prevalence | AUC | Accuracy | F1 | Confusion (TN,FP,FN,TP) |
 |---|---|---|---|---|---|---|
-| CKD | 5658 | 17.2% | 0.7731 | 80.61% | 0.4672 | [4080, 606, 491, 481] |
-| Heart Disease | 7772 | 8.0% | 0.7625 | 74.99% | 0.2714 | [5466, 1684, 260, 362] |
-| Hypertension | 8139 | 36.3% | 0.7742 | 71.10% | 0.6177 | [3887, 1296, 1056, 1900] |
+| CKD | 5658 | 17.2% | 0.7802 | 78.42% | 0.4771 | [3880, 806, 415, 557] |
+| Heart Disease | 7772 | 8.0% | 0.7882 | 71.28% | 0.2878 | [5089, 2061, 171, 451] |
 
 ## How to read this
 
@@ -19,6 +18,6 @@ The CKD, Heart Disease, and Hypertension shipped models were tested on a cohort 
 
 ## Caveats
 
-- **Label definitions are not identical to each training target.** E.g. our Hypertension model's training target ('cardio') is a broader self-reported cardiovascular-disease flag from the Kaggle dataset, while the NHANES ground truth here is specifically doctor-diagnosed high blood pressure (BPQ020) — the closest available NHANES signal, but not an exact match. Similarly Heart Disease compares against doctor-diagnosed CHD/angina/heart-attack, the closest analogue to Framingham's 10-year CHD outcome (which is prospective, not point-in-time).
+- **Label definitions are not identical to each training target.** Heart Disease compares against doctor-diagnosed CHD/angina/heart-attack, the closest analogue to Framingham's 10-year CHD outcome (which is prospective, not point-in-time).
 - Some features are missing per person (e.g. fasting glucose is only collected on a NHANES sub-sample); each model fills gaps with its own training medians, exactly as it would for a real partial checkup.
 - CKD requires serum creatinine to be present (for eGFR); rows without it are excluded from CKD evaluation only.

@@ -27,10 +27,15 @@ MODELS = ["diabetes", "ckd", "heart", "hypertension"]
 DATA = os.path.join(ROOT, "data", "processed")
 
 # A realistic mid-range adult in canonical units (glucose/cholesterol in mg/dL).
+# alcohol/physical_activity were dropped project-wide (no NHANES module for
+# either is available in this environment, so no shipped model consumes them
+# any more — see scripts/build_hypertension_nhanes.py); keeping them here
+# would silently defeat test_no_dead_input_features below.
 PATIENT = {
     "age": 55.0, "sex": 1.0, "bmi": 28.0, "systolic_bp": 135.0, "diastolic_bp": 85.0,
-    "glucose": 140.0, "cholesterol": 220.0, "smoking": 1.0, "alcohol": 0.0,
-    "physical_activity": 0.0,
+    "glucose": 140.0, "cholesterol": 220.0, "smoking": 1.0,
+    "waist_circumference": 95.0, "resting_pulse": 78.0, "uric_acid": 5.5, "cigs_per_day": 0.0,
+    "heartRate": 78.0, "cigsPerDay": 0.0, "prevalentHyp": 0.0, "BPMeds": 0.0,
 }
 
 
@@ -43,8 +48,8 @@ def test_inference_inputs_within_training_ranges():
     """Every non-upstream feature the dashboard sends must fall inside the
     min/max the model was trained on. This is exactly the hypertension
     cholesterol/glucose scale bug (categorical 1-3 vs mg/dL)."""
-    csvs = {"diabetes": "diabetes_clean.csv", "ckd": "ckd_clean.csv",
-            "heart": "heart_clean.csv", "hypertension": "hypertension_clean.csv"}
+    csvs = {"diabetes": "diabetes_nhanes_clean.csv", "ckd": "ckd_nhanes_clean.csv",
+            "heart": "heart_clean.csv", "hypertension": "hypertension_nhanes_clean.csv"}
     problems = []
     for name in MODELS:
         feats = _load(name)["features"]

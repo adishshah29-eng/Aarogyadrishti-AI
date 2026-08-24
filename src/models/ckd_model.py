@@ -8,6 +8,7 @@ from sklearn.model_selection import KFold
 from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, confusion_matrix
 
 from src.models.feature_engineering import add_pulse_pressure, add_bmi_age_interaction
+from src.models.tuned_params import load_tuned
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DATA_PROCESSED = os.path.join(PROJECT_ROOT, "data", "processed")
@@ -65,18 +66,17 @@ def train_and_evaluate():
     }
     
     # XGBoost hyperparameters
+    _tuned = load_tuned('ckd', {
+        'n_estimators': 100, 'max_depth': 4, 'learning_rate': 0.1,
+    })
     base_params = {
-        'n_estimators': 100,
-        'max_depth': 4,
-        'learning_rate': 0.1,
+        **_tuned,
         'random_state': 42,
         'eval_metric': 'logloss',
         'monotone_constraints': SAFE_MONOTONIC + ((1,) if 'serum_creatinine' in baseline_features else ()),
     }
     xgb_params = {
-        'n_estimators': 100,
-        'max_depth': 4,
-        'learning_rate': 0.1,
+        **_tuned,
         'random_state': 42,
         'eval_metric': 'logloss',
         'monotone_constraints': SAFE_MONOTONIC,

@@ -8,6 +8,7 @@ imbalanced-learn==0.14.2
 joblib==1.5.3
 shap==0.51.0
 pyyaml==6.0.1
+optuna==4.9.0
 
 # Dashboard (compatible-release floors; any recent version works).
 streamlit>=1.30,<2

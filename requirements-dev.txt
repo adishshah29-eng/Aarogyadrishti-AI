@@ -1,0 +1,9 @@
+# Test-only dependencies (optuna is a training dependency and lives in
+# requirements.txt alongside the other training-pipeline packages).
+# Install with: pip install -r requirements.txt -r requirements-dev.txt
+pytest>=7.4
+
+# Optional: only needed for tests/test_wizard_e2e.py, which auto-skips if
+# Playwright isn't installed. After installing, also run:
+#   playwright install chromium
+playwright>=1.40

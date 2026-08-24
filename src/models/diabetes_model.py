@@ -30,6 +30,7 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, confusion_matrix
 
 from src.models.feature_engineering import add_pulse_pressure, add_age_glucose_interaction
+from src.models.tuned_params import load_tuned
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DATA_PROCESSED = os.path.join(PROJECT_ROOT, "data", "processed")
@@ -55,14 +56,16 @@ def _engineer(df: pd.DataFrame) -> pd.DataFrame:
 MONOTONIC_CONSTRAINTS = (1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1)
 
 XGB_PARAMS = {
-    'n_estimators': 200,
-    'max_depth': 5,
-    'learning_rate': 0.05,
-    'min_child_weight': 5,
-    'subsample': 0.8,
-    'colsample_bytree': 0.8,
-    'reg_alpha': 0.1,
-    'reg_lambda': 1.0,
+    **load_tuned('diabetes', {
+        'n_estimators': 200,
+        'max_depth': 5,
+        'learning_rate': 0.05,
+        'min_child_weight': 5,
+        'subsample': 0.8,
+        'colsample_bytree': 0.8,
+        'reg_alpha': 0.1,
+        'reg_lambda': 1.0,
+    }),
     'random_state': 42,
     'eval_metric': 'logloss',
     'monotone_constraints': MONOTONIC_CONSTRAINTS,
