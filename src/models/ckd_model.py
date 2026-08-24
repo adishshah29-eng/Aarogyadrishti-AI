@@ -7,7 +7,7 @@ from imblearn.over_sampling import SMOTE
 from sklearn.model_selection import KFold
 from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, confusion_matrix
 
-from src.models.feature_engineering import add_pulse_pressure, add_bmi_age_interaction
+from src.models.feature_engineering import add_pulse_pressure, add_bmi_age_interaction, add_uric_acid_sex_normalized
 from src.models.tuned_params import load_tuned
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -15,18 +15,25 @@ DATA_PROCESSED = os.path.join(PROJECT_ROOT, "data", "processed")
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
 
 RAW_CHECKUP_FEATURES = ['age', 'sex', 'bmi', 'systolic_bp', 'diastolic_bp', 'glucose', 'cholesterol', 'smoking',
-                         'waist_circumference', 'resting_pulse', 'uric_acid']
-ENGINEERED_FEATURES = ['pulse_pressure', 'bmi_age_interaction']
+                         'waist_circumference', 'resting_pulse', 'uric_acid', 'bun', 'triglycerides']
+# SHAP interaction analysis (scripts/analyze_shap_interactions.py) found
+# sex x uric_acid to be this model's second-strongest feature-pair
+# interaction — clinically sensible, since uric acid's normal range is
+# itself sex-specific (see the "uric_acid_sex_norm" definition below).
+ENGINEERED_FEATURES = ['pulse_pressure', 'bmi_age_interaction', 'uric_acid_sex_norm']
 
-# Monotonic constraints (checkup-safe, 13 features):
+# Monotonic constraints (checkup-safe, 16 features):
 # age↑ sex(any) bmi↑ sysBP↑ diaBP(any) glucose↑ chol(any) smoking(any)
-# waist↑ pulse↑ uric_acid↑ pulse_pressure↑ bmi_age↑
-SAFE_MONOTONIC = (1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1)
+# waist↑ pulse↑ uric_acid↑ bun↑ triglycerides↑ pulse_pressure↑ bmi_age↑ uric_acid_sex_norm↑
+# (BUN is a direct kidney-filtration marker; not used to derive the eGFR
+# label, so — unlike serum_creatinine — it isn't leaky here.)
+SAFE_MONOTONIC = (1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1)
 
 
 def _engineer(df: pd.DataFrame) -> pd.DataFrame:
     df = add_pulse_pressure(df)
     df = add_bmi_age_interaction(df)
+    df = add_uric_acid_sex_normalized(df)
     return df
 
 def train_and_evaluate():

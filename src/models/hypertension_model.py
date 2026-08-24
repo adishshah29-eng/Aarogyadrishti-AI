@@ -29,7 +29,7 @@ from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, confusion_m
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 from src.models.upstream import add_upstream_risks, UPSTREAM_FEATURES
-from src.models.feature_engineering import add_pulse_pressure, add_mean_arterial_pressure
+from src.models.feature_engineering import add_pulse_pressure, add_mean_arterial_pressure, add_comorbidity_risk_interaction
 from src.models.tuned_params import load_tuned
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -47,8 +47,14 @@ XGB_PARAMS = {
 }
 
 RAW_ISOLATED_FEATURES = ['age', 'sex', 'bmi', 'systolic_bp', 'diastolic_bp', 'cholesterol', 'glucose', 'smoking',
-                          'waist_circumference', 'resting_pulse', 'uric_acid', 'cigs_per_day']
+                          'waist_circumference', 'resting_pulse', 'uric_acid', 'bun', 'triglycerides', 'cigs_per_day']
 ENGINEERED_FEATURES = ['pulse_pressure', 'mean_arterial_pressure']
+# Computed only once diabetes_risk/ckd_risk are present (see _engineer_chained).
+# SHAP interaction analysis (scripts/analyze_shap_interactions.py) found
+# diabetes_risk x ckd_risk to be this model's single strongest feature-pair
+# interaction — comorbid risk compounds rather than adds, echoing the CRI
+# formula's own interaction terms (src/chaining/cri.py).
+CHAINED_ENGINEERED_FEATURES = ['comorbidity_risk_interaction']
 
 
 def _engineer(df: pd.DataFrame) -> pd.DataFrame:
@@ -57,10 +63,14 @@ def _engineer(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# Monotonic constraints for the shipped chained feature set (16 features):
+def _engineer_chained(df: pd.DataFrame) -> pd.DataFrame:
+    return add_comorbidity_risk_interaction(df)
+
+
+# Monotonic constraints for the shipped chained feature set (19 features):
 # age↑ sex(any) bmi↑ sysBP↑ diaBP↑ chol↑ glucose↑ smoking(any)
-# waist↑ pulse↑ uric_acid↑ cigs↑ pulse_pressure↑ MAP↑ dia_risk↑ ckd_risk↑
-CHAINED_MONOTONIC = (1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1)
+# waist↑ pulse↑ uric_acid↑ bun↑ triglycerides↑ cigs↑ pulse_pressure↑ MAP↑ dia_risk↑ ckd_risk↑ comorbidity_interaction↑
+CHAINED_MONOTONIC = (1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
 
 
 def _run_cv(X, y, xgb_params=XGB_PARAMS, n_splits=5):
@@ -107,12 +117,13 @@ def train_and_evaluate():
 
     # Append genuine upstream risk scores so the model can chain on them.
     df = add_upstream_risks(df)
+    df = _engineer_chained(df)
 
     # Define feature sets. Unlike Heart Disease, this dataset has no separate
     # "full lab panel" beyond the checkup-safe set, so there is no meaningful
     # baseline variant to compare against here.
     isolated_features = RAW_ISOLATED_FEATURES + ENGINEERED_FEATURES
-    chained_features = isolated_features + UPSTREAM_FEATURES   # SHIPPED feature set
+    chained_features = isolated_features + UPSTREAM_FEATURES + CHAINED_ENGINEERED_FEATURES   # SHIPPED feature set
     target_col = 'Outcome' if not legacy else 'cardio'
 
     y = df[target_col]
@@ -190,7 +201,16 @@ def predict_risk(patient_df) -> float:
             df[col] = df[col].fillna(medians[col])
     df = _engineer(df)
 
-    # Remaining features (e.g. chained upstream risks) fall back to medians too
+    # Resolve upstream chained risks (fall back to medians if not chained),
+    # then derive the interaction terms that depend on them.
+    for col in UPSTREAM_FEATURES:
+        if col not in df.columns:
+            df[col] = medians[col]
+        else:
+            df[col] = df[col].fillna(medians[col])
+    df = _engineer_chained(df)
+
+    # Any remaining feature falls back to its training median too.
     for col in features:
         if col not in df.columns:
             df[col] = medians[col]
@@ -226,7 +246,16 @@ def predict_risk_batch(patient_df) -> pd.DataFrame:
             df[col] = df[col].fillna(medians[col])
     df = _engineer(df)
 
-    # Remaining features (e.g. chained upstream risks) fall back to medians too
+    # Resolve upstream chained risks (fall back to medians if not chained),
+    # then derive the interaction terms that depend on them.
+    for col in UPSTREAM_FEATURES:
+        if col not in df.columns:
+            df[col] = medians[col]
+        else:
+            df[col] = df[col].fillna(medians[col])
+    df = _engineer_chained(df)
+
+    # Any remaining feature falls back to its training median too.
     for col in features:
         if col not in df.columns:
             df[col] = medians[col]

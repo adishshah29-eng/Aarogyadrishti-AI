@@ -19,9 +19,23 @@ from src.models.diabetes_model import (_load_model_data as load_diabetes,
 from src.models.ckd_model import (_load_model_data as load_ckd,
     _engineer as engineer_ckd, RAW_CHECKUP_FEATURES as RAW_CKD_FEATURES)
 from src.models.heart_model import (_load_model_data as load_heart,
-    _engineer as engineer_heart, RAW_ISOLATED_FEATURES as RAW_HEART_FEATURES)
+    _engineer as _engineer_heart_raw, _engineer_chained as _engineer_heart_chained,
+    RAW_ISOLATED_FEATURES as RAW_HEART_FEATURES)
 from src.models.hypertension_model import (_load_model_data as load_hypertension,
-    _engineer as engineer_hypertension, RAW_ISOLATED_FEATURES as RAW_HT_FEATURES)
+    _engineer as _engineer_ht_raw, _engineer_chained as _engineer_ht_chained,
+    RAW_ISOLATED_FEATURES as RAW_HT_FEATURES)
+
+
+def engineer_heart(df):
+    """Heart's engineered features split into a raw stage and a chained stage
+    that needs diabetes_risk/ckd_risk already present (see
+    heart_model._engineer_chained) — this SHAP-prep helper needs both, in
+    order, since _prep_for_shap resolves the upstream risk columns first."""
+    return _engineer_heart_chained(_engineer_heart_raw(df))
+
+
+def engineer_hypertension(df):
+    return _engineer_ht_chained(_engineer_ht_raw(df))
 
 st.set_page_config(
     page_title="AarogyaDrishti AI",
@@ -663,7 +677,8 @@ def _risk_props(pct: float):
 
 def encode_inputs(age, sex, bmi, sbp, dbp, glucose, chol, smoking,
                    height=None, waist_circumference=None, resting_pulse=None,
-                   uric_acid=None, cigs_per_day=0.0, prevalent_hyp=None, bp_meds=None):
+                   uric_acid=None, bun=None, triglycerides=None,
+                   cigs_per_day=0.0, prevalent_hyp=None, bp_meds=None):
     # All numeric features are in the canonical units declared in src/schema.py
     # (glucose & cholesterol in mg/dL — every dataset is cleaned to these units).
     # Smoking is encoded as binary because every model was trained on a binary
@@ -673,10 +688,10 @@ def encode_inputs(age, sex, bmi, sbp, dbp, glucose, chol, smoking,
     # environment, so no shipped model consumes them any more — see
     # scripts/build_hypertension_nhanes.py.)
     #
-    # Optional fields (waist, pulse, uric acid, height, hypertension history,
-    # BP meds) are left OUT of the dict entirely when the patient doesn't know
-    # them — every model imputes a missing feature with its own training
-    # median, exactly like a real partial checkup.
+    # Optional fields (waist, pulse, uric acid, BUN, triglycerides, height,
+    # hypertension history, BP meds) are left OUT of the dict entirely when
+    # the patient doesn't know them — every model imputes a missing feature
+    # with its own training median, exactly like a real partial checkup.
     d = {
         'age':               float(age),
         'sex':               1.0 if sex == "Male" else 0.0,
@@ -696,6 +711,10 @@ def encode_inputs(age, sex, bmi, sbp, dbp, glucose, chol, smoking,
         d['heartRate'] = float(resting_pulse)  # Framingham (heart model) naming
     if uric_acid is not None:
         d['uric_acid'] = float(uric_acid)
+    if bun is not None:
+        d['bun'] = float(bun)
+    if triglycerides is not None:
+        d['triglycerides'] = float(triglycerides)
     d['cigs_per_day'] = float(cigs_per_day)
     d['cigsPerDay'] = float(cigs_per_day)      # Framingham (heart model) naming
     if prevalent_hyp is not None:
@@ -1005,6 +1024,12 @@ elif WIZARD_STEP == 2:
                                      format="%.1f", disabled=idk_uric)
         st.markdown('<div class="wiz-help">From a blood test, if you have one. Normal: 3.5-7.2 (men), 2.6-6.0 (women) mg/dL.</div>', unsafe_allow_html=True)
 
+        idk_bun = st.checkbox("I don't know my BUN level", value=PDATA.get('idk_bun', False))
+        bun = st.number_input("Blood urea nitrogen / BUN (mg/dL)", min_value=3.0, max_value=90.0,
+                               value=PDATA.get('bun', 14.0),
+                               format="%.1f", disabled=idk_bun)
+        st.markdown('<div class="wiz-help">From the same standard blood panel as cholesterol/glucose. Normal: 7-20 mg/dL.</div>', unsafe_allow_html=True)
+
     with c2:
         diastolic_bp = st.number_input("Diastolic BP (lower number)", min_value=40, max_value=150,
                                         value=PDATA.get('diastolic_bp', 80))
@@ -1018,6 +1043,12 @@ elif WIZARD_STEP == 2:
         resting_pulse = st.number_input("Resting pulse (bpm)", min_value=30, max_value=200,
                                          value=PDATA.get('resting_pulse', 72), disabled=idk_pulse)
         st.markdown('<div class="wiz-help">Count your heartbeats for 60 seconds while sitting still. Normal: 60-100 bpm.</div>', unsafe_allow_html=True)
+
+        idk_trig = st.checkbox("I don't know my triglycerides", value=PDATA.get('idk_trig', False))
+        triglycerides = st.number_input("Triglycerides (mg/dL)", min_value=20.0, max_value=1000.0,
+                                         value=PDATA.get('triglycerides', 130.0),
+                                         format="%.1f", disabled=idk_trig)
+        st.markdown('<div class="wiz-help">From the same blood test as cholesterol. Normal: below 150 mg/dL.</div>', unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1036,7 +1067,9 @@ elif WIZARD_STEP == 2:
     step2_vals = dict(systolic_bp=systolic_bp, diastolic_bp=diastolic_bp, glucose=glucose, cholesterol=cholesterol,
                        idk_waist=idk_waist, waist_circumference=waist_circumference,
                        idk_pulse=idk_pulse, resting_pulse=resting_pulse,
-                       idk_uric=idk_uric, uric_acid=uric_acid)
+                       idk_uric=idk_uric, uric_acid=uric_acid,
+                       idk_bun=idk_bun, bun=bun,
+                       idk_trig=idk_trig, triglycerides=triglycerides)
 
     nav_l, _, nav_r = st.columns([1, 2, 1])
     with nav_l:
@@ -1106,6 +1139,8 @@ else:
     waist_circumference = None if PDATA.get('idk_waist') else PDATA.get('waist_circumference')
     resting_pulse        = None if PDATA.get('idk_pulse') else PDATA.get('resting_pulse')
     uric_acid             = None if PDATA.get('idk_uric') else PDATA.get('uric_acid')
+    bun                    = None if PDATA.get('idk_bun') else PDATA.get('bun')
+    triglycerides           = None if PDATA.get('idk_trig') else PDATA.get('triglycerides')
     prevalent_hyp_choice  = PDATA.get('prevalent_hyp_choice', "Don't know")
     prevalent_hyp         = {"Yes": 1.0, "No": 0.0}.get(prevalent_hyp_choice)  # None if "Don't know"
     bp_meds                = {"Yes": 1.0, "No": 0.0}[PDATA.get('bp_meds_choice', 'No')]
@@ -1133,7 +1168,8 @@ else:
         age, sex, bmi, systolic_bp, diastolic_bp,
         glucose, cholesterol, smoking,
         height=height, waist_circumference=waist_circumference, resting_pulse=resting_pulse,
-        uric_acid=uric_acid, cigs_per_day=cigs_per_day, prevalent_hyp=prevalent_hyp, bp_meds=bp_meds,
+        uric_acid=uric_acid, bun=bun, triglycerides=triglycerides,
+        cigs_per_day=cigs_per_day, prevalent_hyp=prevalent_hyp, bp_meds=bp_meds,
     )
 
     with st.spinner("Running chained model predictions & SHAP analysis…"):
@@ -1230,10 +1266,10 @@ else:
             # Model accuracy annotations per disease (5-fold CV, checkup-safe;
             # Heart & Hypertension are the shipped *chained* models).
             model_acc = {
-                "Diabetes":      ("81.3%", "0.864"),
-                "CKD":           ("78.1%", "0.777"),
-                "Heart Disease": ("74.2%", "0.713"),
-                "Hypertension":  ("73.5%", "0.811"),
+                "Diabetes":      ("81.8%", "0.868"),
+                "CKD":           ("81.6%", "0.794"),
+                "Heart Disease": ("75.6%", "0.712"),
+                "Hypertension":  ("73.2%", "0.810"),
             }
             ckd_footnote = True
 
@@ -1251,7 +1287,7 @@ else:
                 ckd_note = (
                     '<div style="font-size:0.65rem;color:#92400E;background:#FFFBEB;'
                     'border:1px solid #FCD34D;border-radius:4px;padding:3px 6px;margin-top:8px;line-height:1.4">'
-                    'Checkup-safe only (AUC 0.78). Adding a serum-creatinine lab → AUC 0.82.'
+                    'Checkup-safe only (AUC 0.79). Adding a serum-creatinine lab → AUC 0.83.'
                     '</div>'
                 ) if name == "CKD" else ""
                 with col:
@@ -1320,6 +1356,7 @@ else:
             summary_df = pd.DataFrame({
                 "Feature":  ["Age", "Sex", "Height", "Weight", "BMI (Calculated)", "Upper BP", "Lower BP",
                              "Blood Sugar", "Total Cholesterol", "Waist Circumference", "Resting Pulse", "Uric Acid",
+                             "BUN", "Triglycerides",
                              "Smoking", "Cigarettes/day",
                              "Prior Hypertension Dx", "On BP Medication"],
                 "Value":    [str(age), str(sex), f"{height} cm", f"{weight} kg", f"{bmi:.1f}", f"{systolic_bp} mmHg", f"{diastolic_bp} mmHg",
@@ -1327,10 +1364,12 @@ else:
                              f"{waist_circumference} cm" if waist_circumference is not None else "Not provided",
                              f"{resting_pulse} bpm" if resting_pulse is not None else "Not provided",
                              f"{uric_acid} mg/dL" if uric_acid is not None else "Not provided",
+                             f"{bun} mg/dL" if bun is not None else "Not provided",
+                             f"{triglycerides} mg/dL" if triglycerides is not None else "Not provided",
                              str(smoking), f"{cigs_per_day:.0f}" if smoking == "Current" else "—",
                              prevalent_hyp_choice, PDATA.get('bp_meds_choice', 'No')],
                 "Category": ["Demographic", "Demographic", "Vitals", "Vitals", "Vitals", "Vitals", "Vitals",
-                             "Vitals", "Vitals", "Vitals", "Vitals", "Vitals",
+                             "Vitals", "Vitals", "Vitals", "Vitals", "Vitals", "Vitals", "Vitals",
                              "Lifestyle", "Lifestyle",
                              "History", "History"],
             })
@@ -1352,11 +1391,11 @@ else:
                 # ── Metrics table ──
                 metrics_df = pd.DataFrame({
                     "Model":      ["Diabetes", "CKD", "Heart Disease", "Hypertension"],
-                    "Accuracy":   ["81.3%", "78.1%", "74.2%", "73.5%"],
-                    "ROC AUC":    ["0.864", "0.777", "0.713", "0.811"],
-                    "F1-Score":   ["0.523", "0.492", "0.360", "0.672"],
+                    "Accuracy":   ["81.8%", "81.6%", "75.6%", "73.2%"],
+                    "ROC AUC":    ["0.868", "0.794", "0.712", "0.810"],
+                    "F1-Score":   ["0.528", "0.529", "0.353", "0.667"],
                     "Dataset Size":["7,912", "5,154", "4,240", "8,139"],
-                    "Feature Set":["Checkup-safe, 14 features (NHANES 2021-2023)", "Checkup-safe, 13 features (NHANES 2017-2018)", "Chained checkup-safe, 16 features", "Chained checkup-safe, 16 features (NHANES 2021-2023)"],
+                    "Feature Set":["Checkup-safe, 16 features (NHANES 2021-2023)", "Checkup-safe, 16 features (NHANES 2017-2018)", "Chained checkup-safe, 17 features", "Chained checkup-safe, 19 features (NHANES 2021-2023)"],
                 })
                 st.dataframe(metrics_df, use_container_width=True, hide_index=True)
 
@@ -1395,11 +1434,11 @@ else:
                 chaining_df = pd.DataFrame({
                     "Deployed Model":     ["Heart Disease", "Hypertension"],
                     "Dataset":            ["heart_clean / Framingham (n=4,240)", "hypertension_nhanes_clean (n=8,139)"],
-                    "Isolated Acc":       ["78.40%", "73.88%"],
-                    "Chained Acc":        ["74.20%", "73.51%"],
-                    "Δ Accuracy":         ["-4.20%", "-0.37%"],
-                    "Isolated AUC":       ["0.707", "0.814"],
-                    "Chained AUC":        ["0.713", "0.811"],
+                    "Isolated Acc":       ["80.99%", "73.65%"],
+                    "Chained Acc":        ["75.59%", "73.19%"],
+                    "Δ Accuracy":         ["-5.40%", "-0.46%"],
+                    "Isolated AUC":       ["0.698", "0.814"],
+                    "Chained AUC":        ["0.712", "0.810"],
                 })
                 st.dataframe(chaining_df, use_container_width=True, hide_index=True)
 
@@ -1408,13 +1447,14 @@ else:
                   <p>
                     <strong style="color:var(--teal-600)">Key Finding —</strong>
                     Chaining moves the two deployed downstream models in different directions on accuracy vs.
-                    AUC. For Heart Disease, adding the upstream Diabetes/CKD risk scores improves ROC AUC
-                    (+0.006) — the model discriminates cases better — but costs 4.2 accuracy points, because the
-                    chained model (trained with SMOTE) shifts more borderline cases past the 0.5 threshold into
-                    a positive prediction, trading precision for recall on a ~15% positive dataset. Hypertension
-                    is slightly negative on both metrics (Accuracy −0.37pp, AUC −0.0027) — after its P1 dataset
-                    swap to NHANES doctor-diagnosed hypertension, its own checkup-safe features already carry
-                    most of the signal, so chaining doesn't have much to add. A wider ablation on two independent
+                    AUC. For Heart Disease, adding the upstream Diabetes/CKD risk scores (plus their own
+                    interaction term — see below) improves ROC AUC (+0.014) — the model discriminates cases
+                    better — but costs 5.4 accuracy points, because the chained model (trained with SMOTE)
+                    shifts more borderline cases past the 0.5 threshold into a positive prediction, trading
+                    precision for recall on a ~15% positive dataset. Hypertension is slightly negative on both
+                    metrics (Accuracy −0.46pp, AUC −0.0034) — after its P1 dataset swap to NHANES
+                    doctor-diagnosed hypertension, its own checkup-safe features already carry most of the
+                    signal, so chaining doesn't have much to add. A wider ablation on two independent
                     comorbidity cohorts (see
                     <code>reports/chaining_results.md</code>) shows the same pattern of the chained variant
                     trading some accuracy for better ranking/discrimination. Chaining is a targeted prior, not a
@@ -1511,7 +1551,8 @@ else:
                     age, sex, sim_bmi, sim_sbp, diastolic_bp,
                     sim_glucose, cholesterol, sim_smoking,
                     height=height, waist_circumference=waist_circumference, resting_pulse=resting_pulse,
-                    uric_acid=uric_acid, cigs_per_day=sim_cigs, prevalent_hyp=prevalent_hyp, bp_meds=bp_meds,
+                    uric_acid=uric_acid, bun=bun, triglycerides=triglycerides,
+                    cigs_per_day=sim_cigs, prevalent_hyp=prevalent_hyp, bp_meds=bp_meds,
                 )
                 sim_profile = get_full_risk_profile(sim_data)
                 sim_cri_pct = round(sim_profile['cri'] * 100, 1)

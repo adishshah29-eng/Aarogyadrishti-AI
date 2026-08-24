@@ -33,10 +33,19 @@ sys.path.insert(0, ROOT)
 
 from src.models.upstream import add_upstream_risks, UPSTREAM_FEATURES
 from src.models import diabetes_model, ckd_model, heart_model, hypertension_model
+from src.models.tuned_params import load_tuned
 
 DATA = os.path.join(ROOT, "data", "processed")
 MODELS = os.path.join(ROOT, "models")
 OUT = os.path.join(MODELS, "eval_cache.pkl")
+
+def _heart_engineer(df):
+    return heart_model._engineer_chained(heart_model._engineer(df))
+
+
+def _hypertension_engineer(df):
+    return hypertension_model._engineer_chained(hypertension_model._engineer(df))
+
 
 SCHEMAS = {
     "Diabetes":      {"csv": "diabetes_nhanes_clean.csv", "pkl": "diabetes_model.pkl",
@@ -44,16 +53,16 @@ SCHEMAS = {
                        "engineer": diabetes_model._engineer},
     "CKD":           {"csv": "ckd_nhanes_clean.csv",      "pkl": "ckd_model.pkl",
                        "target": "classification", "params": {
-                           'n_estimators': 100, 'max_depth': 4, 'learning_rate': 0.1,
+                           **load_tuned('ckd', {'n_estimators': 100, 'max_depth': 4, 'learning_rate': 0.1}),
                            'random_state': 42, 'eval_metric': 'logloss',
                            'monotone_constraints': ckd_model.SAFE_MONOTONIC},
                        "engineer": ckd_model._engineer},
     "Heart Disease": {"csv": "heart_clean.csv",           "pkl": "heart_model.pkl",
                        "target": "target",         "params": {**heart_model.XGB_PARAMS, 'monotone_constraints': heart_model.CHAINED_MONOTONIC},
-                       "engineer": heart_model._engineer},
+                       "engineer": _heart_engineer},
     "Hypertension":  {"csv": "hypertension_nhanes_clean.csv", "pkl": "hypertension_model.pkl",
                        "target": "Outcome",        "params": {**hypertension_model.XGB_PARAMS, 'monotone_constraints': hypertension_model.CHAINED_MONOTONIC},
-                       "engineer": hypertension_model._engineer},
+                       "engineer": _hypertension_engineer},
 }
 
 cache = {}

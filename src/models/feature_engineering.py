@@ -49,3 +49,37 @@ def add_bmi_age_interaction(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df["bmi_age_interaction"] = (df["bmi"] * df["age"]) / 100.0
     return df
+
+
+def add_lipid_interaction(df: pd.DataFrame) -> pd.DataFrame:
+    """Cholesterol x triglycerides (scaled). The single most informative
+    non-redundant feature-pair interaction found by SHAP interaction-value
+    analysis of the trained diabetes model (scripts/analyze_shap_interactions.py)
+    — an elevated-lipid-profile signal that neither value captures alone."""
+    df = df.copy()
+    df["lipid_interaction"] = (df["cholesterol"] * df["triglycerides"]) / 10000.0
+    return df
+
+
+def add_uric_acid_sex_normalized(df: pd.DataFrame) -> pd.DataFrame:
+    """Uric acid expressed as a ratio to its sex-specific clinical upper
+    limit (7.2 mg/dL men, 6.0 mg/dL women), so the same raw value carries
+    different meaning by sex the way it clinically should. SHAP interaction
+    analysis of the trained CKD model found sex x uric_acid to be its
+    second-strongest feature-pair interaction, after sex's own broad
+    interaction with the age x BMI term."""
+    df = df.copy()
+    upper_limit = df["sex"].map({1.0: 7.2, 0.0: 6.0}).fillna(6.6)
+    df["uric_acid_sex_norm"] = df["uric_acid"] / upper_limit
+    return df
+
+
+def add_comorbidity_risk_interaction(df: pd.DataFrame) -> pd.DataFrame:
+    """diabetes_risk x ckd_risk. The single strongest feature-pair interaction
+    SHAP found in the trained Hypertension model — comorbid diabetes and CKD
+    risk compound rather than simply add, echoing the same amplification
+    already assumed by the CRI formula's interaction terms (src/chaining/cri.py)
+    but, until now, never exposed to the chained models themselves."""
+    df = df.copy()
+    df["comorbidity_risk_interaction"] = df["diabetes_risk"] * df["ckd_risk"]
+    return df

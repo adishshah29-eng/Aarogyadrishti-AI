@@ -35,6 +35,7 @@ PATIENT = {
     "age": 55.0, "sex": 1.0, "bmi": 28.0, "systolic_bp": 135.0, "diastolic_bp": 85.0,
     "glucose": 140.0, "cholesterol": 220.0, "smoking": 1.0,
     "waist_circumference": 95.0, "resting_pulse": 78.0, "uric_acid": 5.5, "cigs_per_day": 0.0,
+    "bun": 15.0, "triglycerides": 150.0,
     "heartRate": 78.0, "cigsPerDay": 0.0, "prevalentHyp": 0.0, "BPMeds": 0.0,
 }
 

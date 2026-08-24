@@ -57,6 +57,7 @@ def _median_patient(features):
         "age": 50.0, "sex": 1.0, "bmi": 27.0, "systolic_bp": 125.0, "diastolic_bp": 80.0,
         "glucose": 100.0, "cholesterol": 190.0, "smoking": 0.0,
         "waist_circumference": 90.0, "resting_pulse": 72.0, "uric_acid": 5.0, "cigs_per_day": 0.0,
+        "bun": 14.0, "triglycerides": 130.0,
         "heartRate": 72.0, "cigsPerDay": 0.0, "prevalentHyp": 0.0, "BPMeds": 0.0,
         "alcohol": 0.0, "physical_activity": 0.0,
     }
@@ -69,7 +70,7 @@ def test_diabetes_and_ckd_monotonic_features_never_decrease_risk():
     sweeps = {
         "age": (25, 80), "bmi": (18, 45), "systolic_bp": (100, 180), "glucose": (70, 300),
         "waist_circumference": (70, 130), "resting_pulse": (55, 110), "uric_acid": (3.0, 9.0),
-        "cigs_per_day": (0, 30),
+        "cigs_per_day": (0, 30), "bun": (7.0, 40.0), "triglycerides": (50.0, 400.0),
     }
     for name, model, features, constraints in MODELS_WITH_MONOTONE:
         raw_features = [f for f in features if f in sweeps]
@@ -102,6 +103,41 @@ def test_engineered_features_present_after_engineer_step():
         out = model._engineer(df)
         missing = [c for c in engineered_features if c not in out.columns]
         assert not missing, f"{model.__name__}: _engineer didn't produce {missing}"
+
+
+def test_chained_engineered_features_present_after_both_engineer_steps():
+    """Heart/Hypertension's CHAINED_ENGINEERED_FEATURES (e.g.
+    comorbidity_risk_interaction) need diabetes_risk/ckd_risk present first —
+    this is exactly the bug the dashboard's SHAP-prep code had: it imported
+    each model's raw `_engineer` only, never `_engineer_chained`, so the
+    chained interaction column was silently absent and df[features] raised."""
+    for model, raw_features in [
+        (heart_model, heart_model.RAW_ISOLATED_FEATURES),
+        (hypertension_model, hypertension_model.RAW_ISOLATED_FEATURES),
+    ]:
+        df = pd.DataFrame([{**_median_patient(raw_features), "diabetes_risk": 0.2, "ckd_risk": 0.2}])
+        out = model._engineer_chained(model._engineer(df))
+        missing = [c for c in model.CHAINED_ENGINEERED_FEATURES if c not in out.columns]
+        assert not missing, f"{model.__name__}: _engineer_chained didn't produce {missing}"
+
+
+def test_comorbidity_risk_interaction_never_decreases_risk():
+    """Sweeping diabetes_risk upward (with ckd_risk held fixed and positive)
+    must never lower Heart/Hypertension's predicted risk — the new
+    comorbidity_risk_interaction feature carries a +1 monotonic constraint."""
+    for model, raw_features in [
+        (heart_model, heart_model.RAW_ISOLATED_FEATURES),
+        (hypertension_model, hypertension_model.RAW_ISOLATED_FEATURES),
+    ]:
+        base = _median_patient(raw_features)
+        risks = [
+            model.predict_risk({**base, "diabetes_risk": d, "ckd_risk": 0.3})
+            for d in np.linspace(0.05, 0.9, 6)
+        ]
+        assert risks[-1] >= risks[0] - 1e-6, (
+            f"{model.__name__}: risk non-monotonic in diabetes_risk (comorbidity "
+            f"interaction): {risks}"
+        )
 
 
 # ── Missing-column (not just missing-value) imputation ──

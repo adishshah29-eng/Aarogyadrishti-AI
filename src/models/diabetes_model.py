@@ -7,18 +7,23 @@ Kaggle 100k dataset whose glucose column contained only 18 discrete values,
 producing non-monotonic tree artifacts (e.g. glucose=158 predicting 4% risk).
 NHANES glucose has 198 unique real clinical measurements.
 
-Checkup-safe feature set (14 features): the original 8 (age, sex, bmi,
-systolic_bp, diastolic_bp, glucose, cholesterol, smoking) plus 4 additional
+Checkup-safe feature set (16 features): the original 8 (age, sex, bmi,
+systolic_bp, diastolic_bp, glucose, cholesterol, smoking) plus 5 additional
 NHANES measurements (waist_circumference, resting_pulse, uric_acid,
-cigs_per_day) and 2 engineered features (pulse_pressure,
-age_glucose_interaction) — see src/models/feature_engineering.py.
+cigs_per_day, triglycerides — triglycerides added as a core metabolic-
+syndrome/insulin-resistance marker) and 3 engineered features
+(pulse_pressure, age_glucose_interaction, lipid_interaction — the last
+picked by SHAP interaction-value analysis rather than by hand, see
+scripts/analyze_shap_interactions.py) — see
+src/models/feature_engineering.py.
 
 Monotonic constraints enforce clinically correct feature directions:
 age, bmi, systolic_bp, glucose, waist_circumference, resting_pulse,
-uric_acid, cigs_per_day, pulse_pressure, age_glucose_interaction are all
-+1 (higher always increases predicted risk).  sex, diastolic_bp,
-cholesterol, smoking are unconstrained (0) because their relationship with
-diabetes risk is non-directional or context-dependent.
+uric_acid, cigs_per_day, triglycerides, pulse_pressure,
+age_glucose_interaction, lipid_interaction are all +1 (higher always
+increases predicted risk).  sex, diastolic_bp, cholesterol, smoking are
+unconstrained (0) because their relationship with diabetes risk is
+non-directional or context-dependent.
 """
 import os
 import pandas as pd
@@ -29,7 +34,7 @@ from imblearn.over_sampling import SMOTE
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, confusion_matrix
 
-from src.models.feature_engineering import add_pulse_pressure, add_age_glucose_interaction
+from src.models.feature_engineering import add_pulse_pressure, add_age_glucose_interaction, add_lipid_interaction
 from src.models.tuned_params import load_tuned
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -39,21 +44,26 @@ MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
 RAW_FEATURES = [
     'age', 'sex', 'bmi', 'systolic_bp', 'diastolic_bp',
     'glucose', 'cholesterol', 'smoking',
-    'waist_circumference', 'resting_pulse', 'uric_acid', 'cigs_per_day',
+    'waist_circumference', 'resting_pulse', 'uric_acid', 'cigs_per_day', 'triglycerides',
 ]
-ENGINEERED_FEATURES = ['pulse_pressure', 'age_glucose_interaction']
+# SHAP interaction analysis (scripts/analyze_shap_interactions.py) found
+# cholesterol x triglycerides to be this model's strongest non-redundant
+# feature-pair interaction (excluding pairs already captured by
+# age_glucose_interaction itself).
+ENGINEERED_FEATURES = ['pulse_pressure', 'age_glucose_interaction', 'lipid_interaction']
 CHECKUP_SAFE_FEATURES = RAW_FEATURES + ENGINEERED_FEATURES
 
 
 def _engineer(df: pd.DataFrame) -> pd.DataFrame:
     df = add_pulse_pressure(df)
     df = add_age_glucose_interaction(df)
+    df = add_lipid_interaction(df)
     return df
 
 
 # age↑ sex(any) bmi↑ sysBP↑ diaBP(any) glucose↑ chol(any) smoking(any)
-# waist↑ pulse↑ uric_acid↑ cigs↑ pulse_pressure↑ age_glucose↑
-MONOTONIC_CONSTRAINTS = (1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1)
+# waist↑ pulse↑ uric_acid↑ cigs↑ triglycerides↑ pulse_pressure↑ age_glucose↑ lipid_interaction↑
+MONOTONIC_CONSTRAINTS = (1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1)
 
 XGB_PARAMS = {
     **load_tuned('diabetes', {

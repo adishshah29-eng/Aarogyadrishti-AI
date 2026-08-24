@@ -8,8 +8,8 @@ The CKD and Heart Disease shipped models were tested on a cohort **neither was t
 
 | Disease | N (labelled) | Prevalence | AUC | Accuracy | F1 | Confusion (TN,FP,FN,TP) |
 |---|---|---|---|---|---|---|
-| CKD | 5658 | 17.2% | 0.7802 | 78.42% | 0.4771 | [3880, 806, 415, 557] |
-| Heart Disease | 7772 | 8.0% | 0.7882 | 71.28% | 0.2878 | [5089, 2061, 171, 451] |
+| CKD | 5658 | 17.2% | 0.7964 | 82.57% | 0.5099 | [4159, 527, 459, 513] |
+| Heart Disease | 7772 | 8.0% | 0.7775 | 70.72% | 0.2825 | [5048, 2102, 174, 448] |
 
 ## How to read this
 
