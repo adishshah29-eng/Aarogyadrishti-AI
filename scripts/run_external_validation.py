@@ -7,23 +7,22 @@ held-out split) comes from the SAME dataset each model was built on. That
 proves the model fits its own distribution well, but not that it generalizes
 to new patients. This script uses NHANES **August 2021-August 2023** — a
 completely different, more recent survey wave, covering different people than
-any training dataset (CKD: NHANES 2017-2018; Heart: Framingham;
-Hypertension: cardio/Kaggle) — as a genuinely independent test cohort for
-CKD, Heart Disease, and Hypertension.
+any training dataset (CKD: NHANES 2017-2018; Heart: Framingham) — as a
+genuinely independent test cohort for CKD and Heart Disease.
 
-NOTE on Diabetes: as of the P0 monotonic-constraints fix, the Diabetes model
-now trains directly on NHANES 2021-2023 (see scripts/build_diabetes_nhanes.py)
-to eliminate the synthetic-data tree artifacts in the old Kaggle-trained
-model. That means THIS SAME COHORT is no longer an independent test set for
-Diabetes — evaluating it here would be in-sample, not external, validation.
-Diabetes is therefore excluded from this script's external-validation table;
-its only honest out-of-sample check is the 5-fold CV reported in
-reports/baseline_metrics.md.
+NOTE on Diabetes and Hypertension: as of the P0 monotonic-constraints fix and
+the P1 hypertension dataset swap, both the Diabetes and Hypertension models
+now train directly on NHANES 2021-2023 (see scripts/build_diabetes_nhanes.py,
+scripts/build_hypertension_nhanes.py) to eliminate synthetic-data artifacts
+and a broad self-reported ('cardio') label respectively. That means THIS SAME
+COHORT is no longer an independent test set for either — evaluating them here
+would be in-sample, not external, validation. Both are therefore excluded
+from this script's external-validation table; their only honest out-of-sample
+check is the 5-fold CV reported in reports/baseline_metrics.md.
 
 Ground-truth labels are derived independently of our models, from objective
 lab values and doctor-diagnosis questionnaire answers, NOT from what our
 models predict (that would be circular):
-  - Hypertension:  doctor-diagnosed high blood pressure (BPQ020==1)
   - Heart disease: doctor-diagnosed coronary heart disease / angina /
                     heart attack (MCQ160C/D/E == 1)
   - CKD:           eGFR < 60 (CKD-EPI 2021) OR urine ACR >= 30 (KDIGO)
@@ -47,7 +46,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, ROOT)
 
 from scripts.build_ckd_nhanes import egfr_ckd_epi_2021, ckd_label, avg_bp, derive_smoking
-from src.models import diabetes_model, ckd_model, heart_model, hypertension_model
+from src.models import diabetes_model, ckd_model, heart_model
 from src.chaining.cri import compute_cri
 
 RAW = os.path.join(ROOT, "data", "raw", "nhanes", "2021-2023")
@@ -160,21 +159,22 @@ def main():
         print(f"  {c:13s} labelled: {n:5d}  positive rate: {pos:.1%}")
 
     print("\nRunning chained predictions...")
-    # Diabetes predictions are still needed as a chaining input for Heart/HTN,
+    # Diabetes predictions are still needed as a chaining input for Heart,
     # but are NOT evaluated here — this cohort is now the Diabetes model's own
     # training data (see module docstring), so scoring it would be in-sample.
+    # (Hypertension isn't chained into any other model, so it isn't computed
+    # here at all — it's excluded from this table for the same in-sample
+    # reason as Diabetes.)
     p_dia = diabetes_model.predict_risk_batch(feats)["diabetes_risk"]
     p_ckd = ckd_model.predict_risk_batch(feats)["ckd_risk"]
     feats_chain = feats.copy()
     feats_chain["diabetes_risk"] = p_dia.to_numpy()
     feats_chain["ckd_risk"] = p_ckd.to_numpy()
     p_heart = heart_model.predict_risk_batch(feats_chain)["heart_risk"]
-    p_ht = hypertension_model.predict_risk_batch(feats_chain)["hypertension_risk"]
 
     results = {}
     results["CKD"] = evaluate("CKD", labels["ckd"], p_ckd)
     results["Heart Disease"] = evaluate("Heart Disease", labels["heart"], p_heart)
-    results["Hypertension"] = evaluate("Hypertension", labels["hypertension"], p_ht)
 
     print("\n=== EXTERNAL VALIDATION RESULTS (NHANES 2021-2023, unseen cohort) ===")
     for name, r in results.items():
@@ -194,23 +194,26 @@ def write_report(results):
     with open(OUT_MD, "w") as f:
         f.write("# External Validation — NHANES August 2021-August 2023\n\n")
         f.write(
-            "The CKD, Heart Disease, and Hypertension shipped models were tested "
-            "on a cohort **none of them were trained on**: NHANES August "
-            "2021-August 2023, a nationally representative US survey of different "
-            "people than any of their training datasets (CKD: NHANES 2017-2018; "
-            "Heart: Framingham; Hypertension: cardio/Kaggle dataset). Ground-truth "
-            "labels are derived independently of our models, from objective labs "
-            "and doctor-diagnosis questionnaire answers (doctor-diagnosed "
-            "hypertension/heart disease, eGFR + urine ACR for CKD) — never from "
-            "our own predictions, so there is no circularity.\n\n"
-            "**Diabetes is excluded from this table.** As of the P0 monotonic-"
-            "constraints fix, the Diabetes model now trains directly on this same "
-            "NHANES 2021-2023 cohort (replacing the synthetic 100k Kaggle dataset "
-            "that caused a fasting-glucose=158 mg/dL patient to be scored 4.1% "
-            "\"LOW\" risk). Scoring the Diabetes model on this cohort would "
-            "therefore be in-sample evaluation, not external validation — its "
-            "honest out-of-sample estimate is the 5-fold CV in "
-            "`reports/baseline_metrics.md` (Accuracy 81.19%, AUC 0.8624).\n\n"
+            "The CKD and Heart Disease shipped models were tested on a cohort "
+            "**neither was trained on**: NHANES August 2021-August 2023, a "
+            "nationally representative US survey of different people than either "
+            "training dataset (CKD: NHANES 2017-2018; Heart: Framingham). "
+            "Ground-truth labels are derived independently of our models, from "
+            "objective labs and doctor-diagnosis questionnaire answers "
+            "(doctor-diagnosed heart disease, eGFR + urine ACR for CKD) — never "
+            "from our own predictions, so there is no circularity.\n\n"
+            "**Diabetes and Hypertension are excluded from this table.** As of "
+            "the P0 monotonic-constraints fix and the P1 hypertension dataset "
+            "swap, both models now train directly on this same NHANES 2021-2023 "
+            "cohort — Diabetes replacing the synthetic 100k Kaggle dataset that "
+            "caused a fasting-glucose=158 mg/dL patient to be scored 4.1% "
+            "\"LOW\" risk, Hypertension replacing the cardio/Kaggle dataset's "
+            "broad self-reported cardiovascular-disease label with a real "
+            "doctor-diagnosed-hypertension one. Scoring either model on this "
+            "cohort would therefore be in-sample evaluation, not external "
+            "validation — their honest out-of-sample estimates are the 5-fold "
+            "CV numbers in `reports/baseline_metrics.md` (Diabetes: Accuracy "
+            "81.19%, AUC 0.8624; Hypertension: Accuracy 73.20%, AUC 0.8077).\n\n"
         )
         f.write("## Results\n\n")
         f.write("| Disease | N (labelled) | Prevalence | AUC | Accuracy | F1 | Confusion (TN,FP,FN,TP) |\n")
@@ -236,14 +239,9 @@ def write_report(results):
         f.write("\n## Caveats\n\n")
         f.write(
             "- **Label definitions are not identical to each training target.** "
-            "E.g. our Hypertension model's training target ('cardio') is a broader "
-            "self-reported cardiovascular-disease flag from the Kaggle dataset, "
-            "while the NHANES ground truth here is specifically doctor-diagnosed "
-            "high blood pressure (BPQ020) — the closest available NHANES signal, "
-            "but not an exact match. Similarly Heart Disease compares against "
-            "doctor-diagnosed CHD/angina/heart-attack, the closest analogue to "
-            "Framingham's 10-year CHD outcome (which is prospective, not "
-            "point-in-time).\n"
+            "Heart Disease compares against doctor-diagnosed CHD/angina/"
+            "heart-attack, the closest analogue to Framingham's 10-year CHD "
+            "outcome (which is prospective, not point-in-time).\n"
             "- Some features are missing per person (e.g. fasting glucose is only "
             "collected on a NHANES sub-sample); each model fills gaps with its own "
             "training medians, exactly as it would for a real partial checkup.\n"

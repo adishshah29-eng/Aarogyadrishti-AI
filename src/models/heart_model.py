@@ -22,15 +22,16 @@ from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, confusion_m
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 from src.models.upstream import add_upstream_risks, UPSTREAM_FEATURES
 from src.models.feature_engineering import add_pulse_pressure, add_mean_arterial_pressure
+from src.models.tuned_params import load_tuned
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DATA_PROCESSED = os.path.join(PROJECT_ROOT, "data", "processed")
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
 
 XGB_PARAMS = {
-    'n_estimators': 100,
-    'max_depth': 4,
-    'learning_rate': 0.1,
+    **load_tuned('heart', {
+        'n_estimators': 100, 'max_depth': 4, 'learning_rate': 0.1,
+    }),
     'random_state': 42,
     'eval_metric': 'logloss',
 }

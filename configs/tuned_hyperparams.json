@@ -1,0 +1,46 @@
+{
+  "diabetes": {
+    "n_estimators": 357,
+    "max_depth": 4,
+    "learning_rate": 0.026725374794653024,
+    "min_child_weight": 1,
+    "subsample": 0.772014020861807,
+    "colsample_bytree": 0.8271286054514533,
+    "reg_alpha": 2.038715153021983,
+    "reg_lambda": 0.22944459442428444,
+    "_cv_auc": 0.8647
+  },
+  "ckd": {
+    "n_estimators": 109,
+    "max_depth": 7,
+    "learning_rate": 0.02079456956004797,
+    "min_child_weight": 5,
+    "subsample": 0.6686902629427908,
+    "colsample_bytree": 0.915641766719367,
+    "reg_alpha": 0.2652227638629489,
+    "reg_lambda": 3.74299429642342,
+    "_cv_auc": 0.7773
+  },
+  "heart": {
+    "n_estimators": 91,
+    "max_depth": 5,
+    "learning_rate": 0.011880427353747378,
+    "min_child_weight": 2,
+    "subsample": 0.7384132591372372,
+    "colsample_bytree": 0.6509614595118208,
+    "reg_alpha": 0.4274566284836655,
+    "reg_lambda": 1.2878995108464777,
+    "_cv_auc": 0.7133
+  },
+  "hypertension": {
+    "n_estimators": 373,
+    "max_depth": 6,
+    "learning_rate": 0.01172468132056406,
+    "min_child_weight": 6,
+    "subsample": 0.8171449509667235,
+    "colsample_bytree": 0.6725300533326061,
+    "reg_alpha": 0.7183093345335337,
+    "reg_lambda": 0.12827859924667953,
+    "_cv_auc": 0.8099
+  }
+}

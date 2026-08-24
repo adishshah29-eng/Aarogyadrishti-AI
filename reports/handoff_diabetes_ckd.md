@@ -51,9 +51,15 @@ The full canonical schema columns are:
 * `glucose` (float, mg/dL)
 * `cholesterol` (float, mg/dL or category)
 * `smoking` (float, binary `1.0`/`0.0`)
-* `alcohol` (float, binary `1.0`/`0.0`)
-* `physical_activity` (float, binary `1.0`/`0.0`)
+* `waist_circumference` (float, cm) — *added in the P1 feature expansion.*
+* `resting_pulse` (float, bpm) — *added in the P1 feature expansion.*
+* `uric_acid` (float, mg/dL) — *added in the P1 feature expansion.*
+* `cigs_per_day` (float, 0 for non-smokers) — *added in the P1 feature expansion.*
 * `family_history` (float, pedigree score or family history flag)
+
+> **Note:** `alcohol` and `physical_activity` were removed project-wide (no NHANES
+> module for either is available; see `scripts/build_hypertension_nhanes.py`) —
+> no shipped model consumes them any more.
 
 ---
 

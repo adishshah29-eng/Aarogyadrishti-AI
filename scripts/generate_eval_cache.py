@@ -51,8 +51,8 @@ SCHEMAS = {
     "Heart Disease": {"csv": "heart_clean.csv",           "pkl": "heart_model.pkl",
                        "target": "target",         "params": {**heart_model.XGB_PARAMS, 'monotone_constraints': heart_model.CHAINED_MONOTONIC},
                        "engineer": heart_model._engineer},
-    "Hypertension":  {"csv": "hypertension_clean.csv",    "pkl": "hypertension_model.pkl",
-                       "target": "cardio",         "params": {**hypertension_model.XGB_PARAMS, 'monotone_constraints': hypertension_model.CHAINED_MONOTONIC},
+    "Hypertension":  {"csv": "hypertension_nhanes_clean.csv", "pkl": "hypertension_model.pkl",
+                       "target": "Outcome",        "params": {**hypertension_model.XGB_PARAMS, 'monotone_constraints': hypertension_model.CHAINED_MONOTONIC},
                        "engineer": hypertension_model._engineer},
 }
 

@@ -70,8 +70,10 @@ patient_checkup = {
     'glucose': 156.0,      # Elevated glucose
     'cholesterol': 240.0,  # High cholesterol
     'smoking': 1.0,        # Active smoker
-    'alcohol': 0.0,
-    'physical_activity': 0.0,
+    'waist_circumference': 102.0,
+    'resting_pulse': 82.0,
+    'uric_acid': 6.2,
+    'cigs_per_day': 10.0,
     'family_history': 0.65 # Pedigree score
 }
 
