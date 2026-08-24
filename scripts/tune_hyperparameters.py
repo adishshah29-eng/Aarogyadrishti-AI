@@ -81,7 +81,8 @@ def _load_heart():
     df = pd.read_csv(os.path.join(ROOT, "data", "processed", "heart_clean.csv"))
     df = heart_model._engineer(df)
     df = add_upstream_risks(df)
-    feats = heart_model.RAW_ISOLATED_FEATURES + heart_model.ENGINEERED_FEATURES + ["diabetes_risk", "ckd_risk"]
+    df = heart_model._engineer_chained(df)
+    feats = heart_model.RAW_ISOLATED_FEATURES + heart_model.ENGINEERED_FEATURES + ["diabetes_risk", "ckd_risk"] + heart_model.CHAINED_ENGINEERED_FEATURES
     X = df[feats]
     y = df["target"]
     return X, y, heart_model.CHAINED_MONOTONIC
@@ -92,7 +93,8 @@ def _load_hypertension():
     df = pd.read_csv(os.path.join(ROOT, "data", "processed", "hypertension_nhanes_clean.csv"))
     df = hypertension_model._engineer(df)
     df = add_upstream_risks(df)
-    feats = hypertension_model.RAW_ISOLATED_FEATURES + hypertension_model.ENGINEERED_FEATURES + ["diabetes_risk", "ckd_risk"]
+    df = hypertension_model._engineer_chained(df)
+    feats = hypertension_model.RAW_ISOLATED_FEATURES + hypertension_model.ENGINEERED_FEATURES + ["diabetes_risk", "ckd_risk"] + hypertension_model.CHAINED_ENGINEERED_FEATURES
     X = df[feats]
     y = df["Outcome"]
     return X, y, hypertension_model.CHAINED_MONOTONIC

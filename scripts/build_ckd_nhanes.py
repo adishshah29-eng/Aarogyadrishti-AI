@@ -142,7 +142,7 @@ def build():
         bpx = mods["BPX"]
         m = m.merge(bpx[["SEQN", "BPXPLS"] + [c for c in bpx.columns
                                     if c.startswith(("BPXSY", "BPXDI"))]], on="SEQN", how="left")
-        m = m.merge(mods["BIOPRO"][["SEQN", "LBXSCR", "LBXSUA"]], on="SEQN", how="left")
+        m = m.merge(mods["BIOPRO"][["SEQN", "LBXSCR", "LBXSUA", "LBXSBU", "LBXSTR"]], on="SEQN", how="left")
         m = m.merge(mods["TCHOL"][["SEQN", "LBXTC"]], on="SEQN", how="left")
         m = m.merge(mods["GLU"][["SEQN", "LBXGLU"]], on="SEQN", how="left")
         m = m.merge(mods["SMQ"][["SEQN", "SMQ020", "SMQ040"]], on="SEQN", how="left")
@@ -179,6 +179,8 @@ def build():
     out["resting_pulse"] = avg_bp(df, ["BPXPLS"])
     out["uric_acid"] = df["LBXSUA"].astype(float)
     out["height"] = df["BMXHT"].astype(float)
+    out["bun"] = df["LBXSBU"].astype(float)
+    out["triglycerides"] = df["LBXSTR"].astype(float)
     # Lab extras (diagnostic — NOT for the checkup-safe model; they define CKD).
     out["serum_creatinine"] = df["LBXSCR"].astype(float)
     out["egfr"] = df["egfr"].astype(float)
@@ -189,7 +191,7 @@ def build():
     # has clean input — mirrors how the other processed datasets are cleaned.
     # Fasting glucose is a NHANES subsample, so it is the most-imputed column.
     for col in ["bmi", "systolic_bp", "diastolic_bp", "glucose", "cholesterol", "smoking",
-                "waist_circumference", "resting_pulse", "uric_acid", "height"]:
+                "waist_circumference", "resting_pulse", "uric_acid", "height", "bun", "triglycerides"]:
         if out[col].isnull().any():
             med = out[col].median()
             out[col] = out[col].fillna(med if pd.notna(med) else 0.0)

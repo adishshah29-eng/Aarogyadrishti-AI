@@ -47,7 +47,7 @@ def main():
     df = df.merge(_read("GHB_L")[["SEQN", "LBXGH"]], on="SEQN", how="left")
     df = df.merge(_read("SMQ_L")[["SEQN", "SMQ020", "SMQ040", "SMD650"]], on="SEQN", how="left")
     df = df.merge(_read("DIQ_L")[["SEQN", "DIQ010"]], on="SEQN", how="left")
-    df = df.merge(_read("BIOPRO_L")[["SEQN", "LBXSUA"]], on="SEQN", how="left")
+    df = df.merge(_read("BIOPRO_L")[["SEQN", "LBXSUA", "LBXSTR"]], on="SEQN", how="left")
 
     is_female = df["RIAGENDR"] == 2
 
@@ -73,6 +73,7 @@ def main():
     out["height"] = df["BMXHT"].astype(float)
     out["resting_pulse"] = avg_bp(df, pls)
     out["uric_acid"] = df["LBXSUA"].astype(float)
+    out["triglycerides"] = df["LBXSTR"].astype(float)
     # Cigs/day is only asked of current smokers; non/former smokers -> 0.
     out["cigs_per_day"] = pd.to_numeric(df["SMD650"], errors="coerce")
     out.loc[out["smoking"] == 0.0, "cigs_per_day"] = out.loc[out["smoking"] == 0.0, "cigs_per_day"].fillna(0.0)
@@ -85,7 +86,7 @@ def main():
     feat_cols = ["age", "sex", "bmi", "systolic_bp", "diastolic_bp",
                  "glucose", "cholesterol", "smoking",
                  "waist_circumference", "resting_pulse", "uric_acid", "cigs_per_day",
-                 "height"]
+                 "height", "triglycerides"]
     for col in feat_cols:
         med = out[col].median()
         out[col] = out[col].fillna(med)

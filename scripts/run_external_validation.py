@@ -67,7 +67,7 @@ def build_cohort():
     di = [c for c in bpxo.columns if c.startswith("BPXODI")]
     pls = [c for c in bpxo.columns if c.startswith("BPXOPLS")]
     df = df.merge(bpxo[["SEQN"] + sy + di + pls], on="SEQN", how="left")
-    df = df.merge(_read("BIOPRO_L")[["SEQN", "LBXSCR", "LBXSUA"]], on="SEQN", how="left")
+    df = df.merge(_read("BIOPRO_L")[["SEQN", "LBXSCR", "LBXSUA", "LBXSBU", "LBXSTR"]], on="SEQN", how="left")
     df = df.merge(_read("TCHOL_L")[["SEQN", "LBXTC"]], on="SEQN", how="left")
     df = df.merge(_read("GLU_L")[["SEQN", "LBXGLU"]], on="SEQN", how="left")
     df = df.merge(_read("GHB_L")[["SEQN", "LBXGH"]], on="SEQN", how="left")
@@ -97,6 +97,8 @@ def build_cohort():
     feats["height"] = df["BMXHT"].astype(float)
     feats["resting_pulse"] = avg_bp(df, pls)
     feats["uric_acid"] = df["LBXSUA"].astype(float)
+    feats["bun"] = df["LBXSBU"].astype(float)
+    feats["triglycerides"] = df["LBXSTR"].astype(float)
     feats["cigs_per_day"] = pd.to_numeric(df["SMD650"], errors="coerce")
     feats.loc[feats["smoking"] == 0.0, "cigs_per_day"] = feats.loc[feats["smoking"] == 0.0, "cigs_per_day"].fillna(0.0)
     feats["heartRate"] = feats["resting_pulse"]
