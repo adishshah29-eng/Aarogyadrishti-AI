@@ -1,0 +1,15 @@
+{
+  "is_medical_report": true,
+  "items": [
+    {"field": "age", "value": 52, "unit": "Yrs", "printed_name": "Age", "evidence": "Age/Sex: 52 Yrs / Male"},
+    {"field": "sex", "text": "male", "printed_name": "Sex", "evidence": "Age/Sex: 52 Yrs / Male"},
+    {"field": "glucose", "value": 7.4, "unit": "mmol/L", "printed_name": "Glucose Fasting", "qualifier": "fasting", "evidence": "Glucose Fasting 7.4 mmol/L 3.9-5.5"},
+    {"field": "glucose", "value": 11.2, "unit": "mmol/L", "printed_name": "Glucose PP", "qualifier": "post_prandial", "evidence": "Glucose PP 11.2 mmol/L"},
+    {"field": "cholesterol", "value": 232, "unit": "mg/dL", "printed_name": "Total Cholesterol", "evidence": "Total Cholesterol 232 mg/dL <200"},
+    {"field": "triglycerides", "value": 2.1, "unit": "mmol/L", "printed_name": "S. Triglycerides", "evidence": "S. Triglycerides 2.1 mmol/L"},
+    {"field": "uric_acid", "value": 410, "unit": "µmol/L", "printed_name": "Uric Acid", "evidence": "Uric Acid 410 umol/L"},
+    {"field": "bun", "value": 32, "unit": "mg/dL", "printed_name": "Blood Urea", "qualifier": "urea", "evidence": "Blood Urea 32 mg/dL 15-40"},
+    {"field": "hba1c", "value": 6.9, "unit": "%", "printed_name": "HbA1c", "evidence": "HbA1c 6.9 %"},
+    {"field": "patient_name", "text": "should be dropped"}
+  ]
+}

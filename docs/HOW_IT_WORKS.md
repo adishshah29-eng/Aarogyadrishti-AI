@@ -429,11 +429,73 @@ different names for historical reasons (`resting_pulse` also becomes
 Framingham dataset's original column naming that the Heart model still
 uses internally).
 
+### Lab-report upload (optional, Step 1)
+
+A patient can upload a lab report (PDF, phone photo, DOCX or TXT) instead of
+typing numbers. The flow is:
+
+```
+upload (bytes in memory only)
+   │
+   ▼
+extract_gemini.py ── Gemini transcribes value + unit exactly as printed,
+   │                  for our fields only (structured JSON, temperature 0)
+   ▼
+normalize.py ─────── Python converts units, range-checks, picks fasting
+   │                  glucose, converts blood urea → BUN
+   ▼
+review table ─────── patient checks/edits/unticks values, sees what's missing
+   │
+   ▼
+apply_to_pdata() ─── fills PDATA, ticks "I don't know" for optional fields
+                      the report didn't have, lands on the first step with a gap
+```
+
+The key design rule is **Gemini only reads; Python does all the math.** The
+LLM never converts units or judges plausibility, so the risky part is
+deterministic and unit-tested (`tests/test_report_ingest.py`).
+
+- **Field registry** (`src/report_ingest/fields.py`) — one entry per
+  fillable field: canonical unit, accepted report units with conversion
+  factors, the wizard widget's exact min/max and int/float type (a
+  pre-filled value outside them makes Streamlit raise; a test checks the
+  registry against `app.py`), and the model features it feeds (read from
+  each model's own feature list).
+- **Conversions handled:** glucose/cholesterol/triglycerides in mmol/L,
+  uric acid in µmol/L, height in m/inches, weight in lb, and **blood urea →
+  BUN (×0.467)** — most Indian labs print urea, not urea nitrogen.
+- **Rejected, not used:** values outside the widget range (catches a mmol/L
+  number labelled mg/dL), unrecognised units, random/post-meal glucose.
+  **Flagged for checking:** no unit printed, glucose not marked fasting,
+  systolic ≤ diastolic. HbA1c is shown for reference only — no model uses it.
+- **"What's still missing"** is shown in three groups: needed for a
+  prediction (e.g. blood pressure, rarely on a lab report), optional (each
+  naming which models will fall back to a population average), and the
+  Step 3 questions only the patient can answer.
+
+**Privacy.** The file is never written to disk and is sent to Gemini
+*inline* (not via the Files API, which keeps uploads on Google's servers for
+48h). Only the extracted values are kept, in `st.session_state`, and are
+cleared by "Remove report", "Start new assessment", or closing the tab. The
+prompt asks Gemini never to return names, IDs or doctors' names, and any
+field we didn't ask for is dropped. The report itself *does* go to Google:
+the consent checkbox says so, and notes that on the free API tier Google may
+use submitted content to improve its products — use a paid-tier key for a
+real deployment.
+
+**API key.** `GEMINI_API_KEY` in `.streamlit/secrets.toml` or the
+environment (see `.streamlit/secrets.toml.example`); otherwise each user can
+paste their own key in the sidebar, held for their session only. Without a
+key the panel says so and the manual wizard works as before. The model is
+`GEMINI_MODEL` (default `gemini-2.5-flash`). For tests, setting
+`AAROGYA_FAKE_REPORT_JSON` to a canned response file replaces the network
+call entirely.
+
 ---
 
 ## 10. Testing
 
-Three test files under `tests/`, runnable with `python -m pytest tests/`:
+Four test files under `tests/`, runnable with `python -m pytest tests/`:
 
 - **`test_contracts.py`** — guards the *class* of bug an audit found once:
   input-unit mismatches between the dashboard and a model, features the
@@ -455,7 +517,13 @@ Three test files under `tests/`, runnable with `python -m pytest tests/`:
   This exists because both of this session's UI bugs (session-state loss
   advancing past Step 2, and the SHAP `KeyError` on the missing chained
   feature) were only visible by actually clicking through the app — no
-  unit-level test would have caught either one.
+  unit-level test would have caught either one. A second browser test
+  runs the lab-report upload end to end with a canned Gemini response.
+- **`test_report_ingest.py`** — the lab-report pipeline without any
+  network: every unit conversion, urea→BUN, fasting-glucose rules, range
+  rejection, what's-missing lists, applying values to the wizard, the
+  extractor against a fake Gemini client, and a check that the registry's
+  bounds match the wizard widgets exactly.
 
 ---
 
@@ -545,6 +613,11 @@ src/
     generator.py             Turns SHAP values into plain-language insights
   dashboard/
     app.py                  The Streamlit wizard + results UI
+    report_panel.py         Lab-report upload, review table, what's-missing panel
+  report_ingest/
+    fields.py               Registry of report-fillable fields, units, bounds
+    extract_gemini.py        Gemini call: transcription only, structured JSON
+    normalize.py             Unit conversion, validation, apply to the wizard
   schema.py                 Canonical feature names, units, plausible ranges
 
 scripts/
@@ -561,7 +634,9 @@ configs/
 tests/
   test_contracts.py          General correctness guarantees
   test_regression.py         Locks in specific historical bug fixes
-  test_wizard_e2e.py         Browser-driven UI smoke test
+  test_wizard_e2e.py         Browser-driven UI tests (manual flow + report upload)
+  test_report_ingest.py      Lab-report pipeline, no network
+  fixtures/                  Canned Gemini response for tests
 
 reports/
   baseline_metrics.md        Full per-model metrics history (P0→P3 changelog)

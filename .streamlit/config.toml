@@ -1,0 +1,3 @@
+[server]
+# Lab-report uploads are read in memory and never written to disk; keep them small.
+maxUploadSize = 10
