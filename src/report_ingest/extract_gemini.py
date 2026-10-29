@@ -8,13 +8,15 @@ validation happen in normalize.py.
 """
 import io
 import json
+import logging
 from typing import Optional
 
 from pydantic import BaseModel
 
 from src.report_ingest.fields import FIELDS
 
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-3.5-flash"
+FALLBACK_MODEL = "gemini-3.5-flash-lite"
 MAX_BYTES = 10 * 1024 * 1024
 
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -92,14 +94,14 @@ def _friendly_api_error(exc) -> str:
     code = getattr(exc, "code", None)
     text = str(exc).lower()
     if code in (400, 401, 403) and ("api key" in text or "api_key" in text or "permission" in text):
-        return "The Gemini API key was rejected. Check the key and try again."
+        return "The API key was rejected. Check the key and try again."
     if code == 429:
-        return "Gemini's rate limit or quota was reached. Wait a minute, or use a key with more quota."
+        return "The reading quota was reached. Wait a minute and try again."
     if code == 413 or "too large" in text:
-        return "The file is too large for Gemini to read. Try a smaller scan or a single page."
+        return "The file is too large to read. Try a smaller scan or a single page."
     if code and code >= 500:
-        return "Gemini is temporarily unavailable. Try again in a moment."
-    return "Gemini couldn't read this file. You can still fill in the form manually."
+        return "Report reading is temporarily unavailable. Try again in a moment."
+    return "This file couldn't be read. You can still fill in the form manually."
 
 
 def extract(data: bytes, mime: str, api_key: str, model: str = DEFAULT_MODEL) -> list:
@@ -109,7 +111,7 @@ def extract(data: bytes, mime: str, api_key: str, model: str = DEFAULT_MODEL) ->
     if mime not in BINARY_MIMES | TEXT_MIMES:
         raise ReportReadError("Unsupported file type. Upload a PDF, image (PNG/JPG/WEBP), DOCX or TXT.")
     if not api_key:
-        raise ReportReadError("Add a Gemini API key to read reports.")
+        raise ReportReadError("Add an API key to read reports.")
 
     from google import genai
     from google.genai import errors, types
@@ -125,32 +127,53 @@ def extract(data: bytes, mime: str, api_key: str, model: str = DEFAULT_MODEL) ->
     else:
         content = types.Part.from_bytes(data=data, mime_type=mime)
 
-    client = genai.Client(api_key=api_key)
-    try:
-        response = client.models.generate_content(
-            model=model,
-            contents=[content, build_prompt()],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=_Extraction,
-                temperature=0,
-            ),
-        )
-    except errors.APIError as exc:
-        raise ReportReadError(_friendly_api_error(exc))
-    except Exception:
-        raise ReportReadError("Couldn't reach Gemini. Check your internet connection and try again.")
+    client = genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(
+            timeout=40000,
+            retry_options=types.HttpRetryOptions(attempts=1),
+        ),
+    )
+    config = types.GenerateContentConfig(
+        response_mime_type="application/json",
+        response_schema=_Extraction,
+        temperature=0,
+        thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.MINIMAL),
+    )
+    # The larger flash model is often overloaded (503). One lite retry covers that
+    # without making a successful read wait on a second call.
+    candidates = [model]
+    if model == DEFAULT_MODEL and FALLBACK_MODEL not in candidates:
+        candidates.append(FALLBACK_MODEL)
+    response = None
+    for index, candidate in enumerate(candidates):
+        try:
+            response = client.models.generate_content(
+                model=candidate,
+                contents=[content, build_prompt()],
+                config=config,
+            )
+            break
+        except errors.APIError as exc:
+            logging.getLogger(__name__).warning(
+                "Report read failed: %s %s", getattr(exc, "code", None), getattr(exc, "status", None))
+            overloaded = getattr(exc, "code", None) in (429, 500, 502, 503, 504)
+            if overloaded and index < len(candidates) - 1:
+                continue
+            raise ReportReadError(_friendly_api_error(exc))
+        except Exception:
+            raise ReportReadError("Couldn't reach the report reader. Check your internet connection and try again.")
 
     return parse_response_text(getattr(response, "text", None))
 
 
 def parse_response_text(text: Optional[str]) -> list:
     if not text:
-        raise ReportReadError("Gemini returned no readable result for this file.")
+        raise ReportReadError("No readable result came back for this file.")
     try:
         parsed = _Extraction.model_validate(json.loads(text))
     except Exception:
-        raise ReportReadError("Gemini's answer wasn't in the expected format. Try again.")
+        raise ReportReadError("The result wasn't in the expected format. Try again.")
     if not parsed.is_medical_report:
         raise ReportReadError("This doesn't look like a medical or lab report.")
     return [item.model_dump() for item in parsed.items]

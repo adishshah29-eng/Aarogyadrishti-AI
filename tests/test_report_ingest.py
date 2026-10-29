@@ -198,7 +198,7 @@ class _FakeModels:
 
 def _patch_client(monkeypatch, fake_models):
     from google import genai
-    monkeypatch.setattr(genai, "Client", lambda api_key: pytypes.SimpleNamespace(models=fake_models))
+    monkeypatch.setattr(genai, "Client", lambda api_key, **kwargs: pytypes.SimpleNamespace(models=fake_models))
 
 
 def test_extract_sends_inline_bytes_and_parses(monkeypatch):

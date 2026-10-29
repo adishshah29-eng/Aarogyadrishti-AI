@@ -478,16 +478,17 @@ deterministic and unit-tested (`tests/test_report_ingest.py`).
 48h). Only the extracted values are kept, in `st.session_state`, and are
 cleared by "Remove report", "Start new assessment", or closing the tab. The
 prompt asks Gemini never to return names, IDs or doctors' names, and any
-field we didn't ask for is dropped. The report itself *does* go to Google:
-the consent checkbox says so, and notes that on the free API tier Google may
-use submitted content to improve its products — use a paid-tier key for a
-real deployment.
+field we didn't ask for is dropped. The report itself does go to Google.
+The consent checkbox does not name the service; it only asks the user to let
+the app read the report and says nothing is saved. On Google's free API tier,
+submitted content may be used to improve Google's products — use a paid-tier
+key for a real deployment.
 
 **API key.** `GEMINI_API_KEY` in `.streamlit/secrets.toml` or the
 environment (see `.streamlit/secrets.toml.example`); otherwise each user can
 paste their own key in the sidebar, held for their session only. Without a
 key the panel says so and the manual wizard works as before. The model is
-`GEMINI_MODEL` (default `gemini-2.5-flash`). For tests, setting
+`GEMINI_MODEL` (default `gemini-3.5-flash`). For tests, setting
 `AAROGYA_FAKE_REPORT_JSON` to a canned response file replaces the network
 call entirely.
 

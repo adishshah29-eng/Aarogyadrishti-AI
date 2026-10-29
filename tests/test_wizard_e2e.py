@@ -138,7 +138,7 @@ def test_report_upload_fills_wizard_and_lists_whats_missing(streamlit_url_fake_r
             page.goto(streamlit_url_fake_report, timeout=30000)
             page.wait_for_timeout(3000)
 
-            page.get_by_text("I agree to send this report").click()
+            page.get_by_text("I agree to let this app read this report").click()
             page.wait_for_timeout(1500)
             page.locator("input[type=file]").set_input_files(str(report))
             page.wait_for_timeout(2000)

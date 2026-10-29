@@ -52,7 +52,7 @@ def render_sidebar_key():
     if configured_key() or fake_extractor_enabled():
         return
     st.markdown('<div class="sb-section">Lab report reading</div>', unsafe_allow_html=True)
-    st.text_input("Gemini API key (optional)", type="password", key="gemini_key_input",
+    st.text_input("API key (optional)", type="password", key="gemini_key_input",
                   help="Used only to read an uploaded lab report. Kept for this browser "
                        "session only — never saved.")
 
@@ -202,14 +202,13 @@ def render_report_panel(pdata: dict):
             return
 
         if not can_read:
-            st.info("Reading reports needs a Gemini API key. Add one in the sidebar, or fill "
+            st.info("Reading reports needs an API key. Add one in the sidebar, or fill "
                     "in the form below yourself.")
             return
 
         consent = st.checkbox(
-            "I agree to send this report to Google's Gemini API to read it. This app saves "
-            "nothing. On Google's free (unpaid) API tier, Google may use submitted content to "
-            "improve its products; paid-tier keys aren't used that way.",
+            "I agree to let this app read this report and fill in the form. "
+            "Nothing from the report is saved.",
             value=st.session_state.get("report_consent_given", False),
         )
         st.session_state["report_consent_given"] = consent
