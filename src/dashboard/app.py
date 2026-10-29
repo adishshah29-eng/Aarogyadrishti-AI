@@ -13,6 +13,8 @@ if PROJECT_ROOT not in sys.path:
 from src.chaining.cri import get_full_risk_profile
 from src.explainability.shap_engine import explain_prediction
 from src.schema import range_warnings
+from src.dashboard.report_panel import (render_report_panel, render_sidebar_key,
+                                        source_badge, clear_report)
 
 from src.models.diabetes_model import (_load_model_data as load_diabetes,
     _engineer as engineer_diabetes, RAW_FEATURES as RAW_DIABETES_FEATURES)
@@ -178,6 +180,8 @@ html, body, [class*="css"] {
   color: var(--text-secondary) !important;
 }
 [data-testid="stSidebar"] .stNumberInput input,
+[data-testid="stSidebar"] [data-testid="stTextInputRootElement"],
+[data-testid="stSidebar"] .stTextInput [data-baseweb="input"],
 [data-testid="stSidebar"] .stSelectbox > div > div {
   background: var(--surface-muted) !important;
   border: 1px solid var(--border) !important;
@@ -618,6 +622,27 @@ hr {
   margin: -10px 0 12px !important;
   line-height: 1.4 !important;
 }
+.src-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--teal-700);
+  background: var(--teal-50);
+  border: 1px solid var(--teal-100);
+  border-radius: 999px;
+  padding: 1px 8px;
+  margin: -12px 0 10px;
+}
+.src-badge.src-missing {
+  color: #92400E;
+  background: #FFFBEB;
+  border-color: #FCD34D;
+}
+.rp-dim {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
 .wiz-bmi-pill {
   display: inline-flex;
   align-items: center;
@@ -723,13 +748,16 @@ def encode_inputs(age, sex, bmi, sbp, dbp, glucose, chol, smoking,
         d['BPMeds'] = float(bp_meds)
     return d
 
-def validate_inputs(age, bmi, sbp, dbp, glucose, chol):
+def validate_inputs(age, bmi, sbp, dbp, glucose, chol, **optional):
     """Return (field, message) clinical-range warnings, driven by the canonical
-    ranges declared in src/schema.py (single source of truth)."""
-    return range_warnings({
+    ranges declared in src/schema.py (single source of truth). Optional lab
+    values are checked only when given (None = "I don't know")."""
+    values = {
         'age': age, 'bmi': bmi, 'systolic_bp': sbp, 'diastolic_bp': dbp,
         'glucose': glucose, 'cholesterol': chol,
-    })
+    }
+    values.update({k: v for k, v in optional.items() if v is not None})
+    return range_warnings(values)
 
 def make_gauge(pct: float, color: str) -> go.Figure:
     fig = go.Figure(go.Indicator(
@@ -919,6 +947,7 @@ with st.sidebar:
             st.session_state.wizard_step = 1
             st.rerun()
         if st.button("↺ Start new assessment", use_container_width=True):
+            clear_report()
             st.session_state.pdata = {}
             st.session_state.wizard_step = 1
             st.rerun()
@@ -929,6 +958,7 @@ with st.sidebar:
             'Answer 3 short steps in the main panel — demographics, checkup numbers, and '
             'lifestyle — then get your full risk profile. Anything you don\'t know can be skipped.'
             '</p>', unsafe_allow_html=True)
+    render_sidebar_key()
 
 
 # ── Top Bar ───────────────────────────────────────────────────────────────────────
@@ -967,6 +997,7 @@ WIZARD_STEP = st.session_state.wizard_step
 # ── Step 1: Demographics ────────────────────────────────────────────────────────
 if WIZARD_STEP == 1:
     render_wizard_steps(1)
+    render_report_panel(PDATA)
     st.markdown('<div class="wiz-card">', unsafe_allow_html=True)
     st.markdown('<div class="wiz-card-title">Tell us about you</div>', unsafe_allow_html=True)
     st.markdown('<div class="wiz-card-sub">A few basics to start your health assessment.</div>', unsafe_allow_html=True)
@@ -974,13 +1005,17 @@ if WIZARD_STEP == 1:
     c1, c2 = st.columns(2)
     with c1:
         age = st.number_input("Age", min_value=1, max_value=120, value=PDATA.get('age', 45))
+        source_badge(PDATA, 'age', age)
         height = st.number_input("Height (cm)", min_value=50.0, max_value=250.0,
                                   value=PDATA.get('height', 170.0), format="%.1f")
+        source_badge(PDATA, 'height', height)
     with c2:
         sex = st.selectbox("Sex", ["Male", "Female"],
                             index=["Male", "Female"].index(PDATA.get('sex', 'Male')))
+        source_badge(PDATA, 'sex', sex)
         weight = st.number_input("Weight (kg)", min_value=10.0, max_value=300.0,
                                   value=PDATA.get('weight', 70.0), format="%.1f")
+        source_badge(PDATA, 'weight', weight)
 
     bmi = weight / ((height / 100) ** 2)
     st.markdown(f'<div class="wiz-bmi-pill">Your BMI: {bmi:.1f} kg/m²</div>', unsafe_allow_html=True)
@@ -1006,53 +1041,68 @@ elif WIZARD_STEP == 2:
     with c1:
         systolic_bp = st.number_input("Systolic BP (upper number)", min_value=70, max_value=250,
                                        value=PDATA.get('systolic_bp', 120))
+        source_badge(PDATA, 'systolic_bp', systolic_bp)
         st.markdown('<div class="wiz-help">The top number on a blood pressure reading, e.g. 120. Normal: below 120 mmHg.</div>', unsafe_allow_html=True)
 
         glucose = st.number_input("Fasting blood glucose (mg/dL)", min_value=50, max_value=400,
                                    value=PDATA.get('glucose', 100))
+        source_badge(PDATA, 'glucose', glucose)
         st.markdown('<div class="wiz-help">From a fasting blood test. Normal: 70-99 mg/dL; 126+ is diagnostic for diabetes.</div>', unsafe_allow_html=True)
 
         idk_waist = st.checkbox("I don't know my waist size", value=PDATA.get('idk_waist', False))
         waist_circumference = st.number_input("Waist circumference (cm)", min_value=40.0, max_value=200.0,
                                                value=PDATA.get('waist_circumference', 90.0),
                                                format="%.1f", disabled=idk_waist)
+        source_badge(PDATA, 'waist_circumference', waist_circumference)
         st.markdown('<div class="wiz-help">Measured around the navel, standing, after breathing out.</div>', unsafe_allow_html=True)
 
         idk_uric = st.checkbox("I don't know my uric acid level", value=PDATA.get('idk_uric', False))
         uric_acid = st.number_input("Uric acid (mg/dL)", min_value=1.0, max_value=15.0,
                                      value=PDATA.get('uric_acid', 5.0),
                                      format="%.1f", disabled=idk_uric)
+        source_badge(PDATA, 'uric_acid', uric_acid)
         st.markdown('<div class="wiz-help">From a blood test, if you have one. Normal: 3.5-7.2 (men), 2.6-6.0 (women) mg/dL.</div>', unsafe_allow_html=True)
 
         idk_bun = st.checkbox("I don't know my BUN level", value=PDATA.get('idk_bun', False))
         bun = st.number_input("Blood urea nitrogen / BUN (mg/dL)", min_value=3.0, max_value=90.0,
                                value=PDATA.get('bun', 14.0),
                                format="%.1f", disabled=idk_bun)
+        source_badge(PDATA, 'bun', bun)
         st.markdown('<div class="wiz-help">From the same standard blood panel as cholesterol/glucose. Normal: 7-20 mg/dL.</div>', unsafe_allow_html=True)
 
     with c2:
         diastolic_bp = st.number_input("Diastolic BP (lower number)", min_value=40, max_value=150,
                                         value=PDATA.get('diastolic_bp', 80))
+        source_badge(PDATA, 'diastolic_bp', diastolic_bp)
         st.markdown('<div class="wiz-help">The bottom number on a blood pressure reading, e.g. 80. Normal: below 80 mmHg.</div>', unsafe_allow_html=True)
 
         cholesterol = st.number_input("Total cholesterol (mg/dL)", min_value=100, max_value=400,
                                        value=PDATA.get('cholesterol', 190))
+        source_badge(PDATA, 'cholesterol', cholesterol)
         st.markdown('<div class="wiz-help">From a blood test. Normal: below 200 mg/dL.</div>', unsafe_allow_html=True)
 
         idk_pulse = st.checkbox("I don't know my resting pulse", value=PDATA.get('idk_pulse', False))
         resting_pulse = st.number_input("Resting pulse (bpm)", min_value=30, max_value=200,
                                          value=PDATA.get('resting_pulse', 72), disabled=idk_pulse)
+        source_badge(PDATA, 'resting_pulse', resting_pulse)
         st.markdown('<div class="wiz-help">Count your heartbeats for 60 seconds while sitting still. Normal: 60-100 bpm.</div>', unsafe_allow_html=True)
 
         idk_trig = st.checkbox("I don't know my triglycerides", value=PDATA.get('idk_trig', False))
         triglycerides = st.number_input("Triglycerides (mg/dL)", min_value=20.0, max_value=1000.0,
                                          value=PDATA.get('triglycerides', 130.0),
                                          format="%.1f", disabled=idk_trig)
+        source_badge(PDATA, 'triglycerides', triglycerides)
         st.markdown('<div class="wiz-help">From the same blood test as cholesterol. Normal: below 150 mg/dL.</div>', unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    input_warnings = validate_inputs(age, bmi, systolic_bp, diastolic_bp, glucose, cholesterol)
+    input_warnings = validate_inputs(
+        age, bmi, systolic_bp, diastolic_bp, glucose, cholesterol,
+        waist_circumference=None if idk_waist else waist_circumference,
+        resting_pulse=None if idk_pulse else resting_pulse,
+        uric_acid=None if idk_uric else uric_acid,
+        bun=None if idk_bun else bun,
+        triglycerides=None if idk_trig else triglycerides)
     if input_warnings:
         st.markdown('<div style="background:#FFFBEB;border:1px solid #FCD34D;border-left:3px solid #D97706;'
                      'border-radius:10px;padding:12px 16px;margin-bottom:16px">'

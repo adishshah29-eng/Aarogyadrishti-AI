@@ -39,6 +39,11 @@ FEATURE_UNITS = {
     'alcohol':           'binary (1=yes)',
     'physical_activity': 'binary (1=active)',
     'family_history':    'reserved (not populated by any shipped model)',
+    'waist_circumference': 'cm',
+    'resting_pulse':     'bpm',
+    'uric_acid':         'mg/dL',
+    'bun':               'mg/dL',
+    'triglycerides':     'mg/dL',
 }
 
 # Physiologically plausible ranges, used by the dashboard to warn on bad input.
@@ -49,6 +54,11 @@ FEATURE_RANGES = {
     'diastolic_bp':(40, 140),
     'glucose':     (50, 600),
     'cholesterol': (100, 500),
+    'waist_circumference': (50, 160),
+    'resting_pulse': (40, 140),
+    'uric_acid': (2.0, 12.0),
+    'bun': (5.0, 60.0),
+    'triglycerides': (30, 800),
 }
 
 
@@ -60,7 +70,9 @@ def range_warnings(values: dict) -> list:
     labels = {
         'age': 'Age', 'bmi': 'BMI', 'systolic_bp': 'Systolic BP',
         'diastolic_bp': 'Diastolic BP', 'glucose': 'Fasting Glucose',
-        'cholesterol': 'Cholesterol',
+        'cholesterol': 'Cholesterol', 'waist_circumference': 'Waist',
+        'resting_pulse': 'Resting pulse', 'uric_acid': 'Uric acid', 'bun': 'BUN',
+        'triglycerides': 'Triglycerides',
     }
     warnings = []
     for feat, (lo, hi) in FEATURE_RANGES.items():

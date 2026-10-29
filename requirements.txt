@@ -13,3 +13,8 @@ optuna==4.9.0
 # Dashboard (compatible-release floors; any recent version works).
 streamlit>=1.30,<2
 plotly>=5.18
+
+# Lab-report upload (src/report_ingest): Gemini reads the report; python-docx
+# turns .docx into text first.
+google-genai>=1.30,<3
+python-docx>=1.1
