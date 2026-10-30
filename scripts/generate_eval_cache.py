@@ -65,63 +65,87 @@ SCHEMAS = {
                        "engineer": _hypertension_engineer},
 }
 
-cache = {}
+def evaluate_held_out():
+    """Train each shipped recipe on a stratified 80% split and score the 20%.
 
-for name, cfg in SCHEMAS.items():
-    print(f"\n── {name} ──")
-    df = pd.read_csv(os.path.join(DATA, cfg["csv"]))
-    feats = joblib.load(os.path.join(MODELS, cfg["pkl"]))["features"]
-    target = cfg["target"]
+    The fitted model never sees the test rows. Feature engineering and upstream
+    chaining match the shipped models. Returns a dict keyed by model name with
+    y_test, predicted probabilities, the fitted model, n_test, and pos_rate.
+    """
+    results = {}
+    for name, cfg in SCHEMAS.items():
+        print(f"\n── {name} ──")
+        df = pd.read_csv(os.path.join(DATA, cfg["csv"]))
+        feats = joblib.load(os.path.join(MODELS, cfg["pkl"]))["features"]
+        target = cfg["target"]
 
-    # Downstream models chain on upstream risk scores that are not columns of
-    # the raw processed CSV — regenerate them so the feature set matches ship.
-    if any(f in UPSTREAM_FEATURES for f in feats) and not set(UPSTREAM_FEATURES).issubset(df.columns):
-        df = add_upstream_risks(df)
+        # Downstream models chain on upstream risk scores that are not columns of
+        # the raw processed CSV — regenerate them so the feature set matches ship.
+        if any(f in UPSTREAM_FEATURES for f in feats) and not set(UPSTREAM_FEATURES).issubset(df.columns):
+            df = add_upstream_risks(df)
 
-    # Derive each model's engineered features (pulse pressure, interaction
-    # terms, ...) the same way train_and_evaluate() does, so `feats` resolves.
-    df = cfg["engineer"](df)
+        # Derive each model's engineered features (pulse pressure, interaction
+        # terms, ...) the same way train_and_evaluate() does, so `feats` resolves.
+        df = cfg["engineer"](df)
 
-    if target not in df.columns:
-        candidates = [c for c in df.columns if c.lower() == target.lower()]
-        if not candidates:
-            print(f"  WARNING: target '{target}' not found; skipping.")
-            continue
-        target = candidates[0]
+        if target not in df.columns:
+            candidates = [c for c in df.columns if c.lower() == target.lower()]
+            if not candidates:
+                print(f"  WARNING: target '{target}' not found; skipping.")
+                continue
+            target = candidates[0]
 
-    df = df[[c for c in feats + [target] if c in df.columns]].dropna()
-    X = df[feats]
-    y = df[target].astype(int)
+        df = df[[c for c in feats + [target] if c in df.columns]].dropna()
+        X = df[feats]
+        y = df[target].astype(int)
 
-    # Genuine held-out split: the model below never sees X_test / y_test.
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, stratify=y, random_state=42
-    )
+        # Genuine held-out split: the model below never sees X_test / y_test.
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, stratify=y, random_state=42
+        )
 
-    # Train a fresh model with the shipped configuration on the train split only.
-    smote = SMOTE(random_state=42)
-    X_res, y_res = smote.fit_resample(X_train, y_train)
-    model = XGBClassifier(**cfg["params"])
-    model.fit(X_res, y_res)
+        # Train a fresh model with the shipped configuration on the train split only.
+        smote = SMOTE(random_state=42)
+        X_res, y_res = smote.fit_resample(X_train, y_train)
+        model = XGBClassifier(**cfg["params"])
+        model.fit(X_res, y_res)
 
-    probs = model.predict_proba(X_test)[:, 1]
+        probs = model.predict_proba(X_test)[:, 1]
+        y_test = np.asarray(y_test).astype(int)
+        print(f"  Held-out n_test={len(y_test)}  pos_rate={y_test.mean():.4f}")
 
-    fpr, tpr, _ = roc_curve(y_test, probs)
-    roc_auc = auc(fpr, tpr)
-    print(f"  Held-out ROC AUC = {roc_auc:.4f}  (n_test={len(y_test)})")
+        results[name] = {
+            "y_test": y_test,
+            "probs": np.asarray(probs, dtype=float),
+            "model": model,
+            "n_test": int(len(y_test)),
+            "pos_rate": float(y_test.mean()),
+        }
+    return results
 
-    prob_true, prob_pred = calibration_curve(y_test, probs, n_bins=10, strategy="uniform")
 
-    cache[name] = {
-        "fpr": fpr.tolist(),
-        "tpr": tpr.tolist(),
-        "roc_auc": float(roc_auc),
-        "prob_true": prob_true.tolist(),
-        "prob_pred": prob_pred.tolist(),
-        "n_test": int(len(y_test)),
-        "pos_rate": float(y_test.mean()),
-    }
+def main():
+    cache = {}
+    for name, row in evaluate_held_out().items():
+        y_test, probs = row["y_test"], row["probs"]
+        fpr, tpr, _ = roc_curve(y_test, probs)
+        roc_auc = auc(fpr, tpr)
+        print(f"  {name} held-out ROC AUC = {roc_auc:.4f}")
+        prob_true, prob_pred = calibration_curve(y_test, probs, n_bins=10, strategy="uniform")
+        cache[name] = {
+            "fpr": fpr.tolist(),
+            "tpr": tpr.tolist(),
+            "roc_auc": float(roc_auc),
+            "prob_true": prob_true.tolist(),
+            "prob_pred": prob_pred.tolist(),
+            "n_test": row["n_test"],
+            "pos_rate": row["pos_rate"],
+        }
 
-joblib.dump(cache, OUT)
-print(f"\n✓ eval_cache.pkl saved to {OUT}")
-print(f"  Keys: {list(cache.keys())}")
+    joblib.dump(cache, OUT)
+    print(f"\n✓ eval_cache.pkl saved to {OUT}")
+    print(f"  Keys: {list(cache.keys())}")
+
+
+if __name__ == "__main__":
+    main()

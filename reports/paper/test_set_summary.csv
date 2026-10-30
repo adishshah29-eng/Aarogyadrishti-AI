@@ -1,0 +1,5 @@
+model,n_test,n_positive,positive_rate
+Diabetes,1583,245,0.154769
+Heart,848,129,0.152123
+CKD,1031,194,0.188167
+Hypertension,1628,591,0.363022

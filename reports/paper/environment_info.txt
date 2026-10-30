@@ -1,0 +1,227 @@
+Python: 3.13.5
+xgboost: 3.2.0
+scikit-learn: 1.9.0
+shap: 0.51.0
+imbalanced-learn: 0.14.2
+pandas: 3.0.5
+numpy: 2.4.6
+streamlit: 1.60.0
+plotly: 6.9.0
+OS: Windows-11-10.0.26300-SP0
+CPU: 13th Gen Intel(R) Core(TM) i5-1334U
+Cores: 12
+RAM: 7.65 GB (8216391680 bytes)
+
+XGBoost hyperparameters (model.get_params() on the held-out training fit):
+[Diabetes]
+  base_score: None
+  booster: None
+  callbacks: None
+  colsample_bylevel: None
+  colsample_bynode: None
+  colsample_bytree: 0.8618221190401678
+  device: None
+  early_stopping_rounds: None
+  enable_categorical: False
+  eval_metric: 'logloss'
+  feature_types: None
+  feature_weights: None
+  gamma: None
+  grow_policy: None
+  importance_type: None
+  interaction_constraints: None
+  learning_rate: 0.06831344620903163
+  max_bin: None
+  max_cat_threshold: None
+  max_cat_to_onehot: None
+  max_delta_step: None
+  max_depth: 3
+  max_leaves: None
+  min_child_weight: 2
+  missing: nan
+  monotone_constraints: (1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1)
+  multi_strategy: None
+  n_estimators: 280
+  n_jobs: None
+  num_parallel_tree: None
+  objective: 'binary:logistic'
+  random_state: 42
+  reg_alpha: 0.06963181824185036
+  reg_lambda: 9.731377787767343
+  sampling_method: None
+  scale_pos_weight: None
+  subsample: 0.7702605600613884
+  tree_method: None
+  validate_parameters: None
+  verbosity: None
+
+[Heart Disease]
+  base_score: None
+  booster: None
+  callbacks: None
+  colsample_bylevel: None
+  colsample_bynode: None
+  colsample_bytree: 0.6460818340108363
+  device: None
+  early_stopping_rounds: None
+  enable_categorical: False
+  eval_metric: 'logloss'
+  feature_types: None
+  feature_weights: None
+  gamma: None
+  grow_policy: None
+  importance_type: None
+  interaction_constraints: None
+  learning_rate: 0.011535024370241172
+  max_bin: None
+  max_cat_threshold: None
+  max_cat_to_onehot: None
+  max_delta_step: None
+  max_depth: 6
+  max_leaves: None
+  min_child_weight: 8
+  missing: nan
+  monotone_constraints: (1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+  multi_strategy: None
+  n_estimators: 259
+  n_jobs: None
+  num_parallel_tree: None
+  objective: 'binary:logistic'
+  random_state: 42
+  reg_alpha: 0.018894127752580297
+  reg_lambda: 4.895108995466606
+  sampling_method: None
+  scale_pos_weight: None
+  subsample: 0.8077454301411243
+  tree_method: None
+  validate_parameters: None
+  verbosity: None
+
+[CKD]
+  base_score: None
+  booster: None
+  callbacks: None
+  colsample_bylevel: None
+  colsample_bynode: None
+  colsample_bytree: 0.7828717308928935
+  device: None
+  early_stopping_rounds: None
+  enable_categorical: False
+  eval_metric: 'logloss'
+  feature_types: None
+  feature_weights: None
+  gamma: None
+  grow_policy: None
+  importance_type: None
+  interaction_constraints: None
+  learning_rate: 0.029877634449755004
+  max_bin: None
+  max_cat_threshold: None
+  max_cat_to_onehot: None
+  max_delta_step: None
+  max_depth: 6
+  max_leaves: None
+  min_child_weight: 6
+  missing: nan
+  monotone_constraints: (1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1)
+  multi_strategy: None
+  n_estimators: 104
+  n_jobs: None
+  num_parallel_tree: None
+  objective: 'binary:logistic'
+  random_state: 42
+  reg_alpha: 0.010279295040588611
+  reg_lambda: 0.19306467375088626
+  sampling_method: None
+  scale_pos_weight: None
+  subsample: 0.6054706007622693
+  tree_method: None
+  validate_parameters: None
+  verbosity: None
+
+[Hypertension]
+  base_score: None
+  booster: None
+  callbacks: None
+  colsample_bylevel: None
+  colsample_bynode: None
+  colsample_bytree: 0.8205459642997539
+  device: None
+  early_stopping_rounds: None
+  enable_categorical: False
+  eval_metric: 'logloss'
+  feature_types: None
+  feature_weights: None
+  gamma: None
+  grow_policy: None
+  importance_type: None
+  interaction_constraints: None
+  learning_rate: 0.023724670333907752
+  max_bin: None
+  max_cat_threshold: None
+  max_cat_to_onehot: None
+  max_delta_step: None
+  max_depth: 3
+  max_leaves: None
+  min_child_weight: 8
+  missing: nan
+  monotone_constraints: (1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+  multi_strategy: None
+  n_estimators: 384
+  n_jobs: None
+  num_parallel_tree: None
+  objective: 'binary:logistic'
+  random_state: 42
+  reg_alpha: 0.06707781201045764
+  reg_lambda: 4.116905383767855
+  sampling_method: None
+  scale_pos_weight: None
+  subsample: 0.8383874807701802
+  tree_method: None
+  validate_parameters: None
+  verbosity: None
+
+CRI formula (src/chaining/cri.py, compute_cri):
+  CRI = clip(0.30*P(Diabetes) + 0.20*P(CKD) + 0.25*P(Heart) + 0.25*P(Hypertension)
+            + 0.15*P(Diabetes)*P(Heart)
+            + 0.10*P(Hypertension)*P(Heart)
+            + 0.05*P(Diabetes)*P(Hypertension), 0, 1)
+Weights:
+  P(Diabetes): 0.30
+  P(CKD): 0.20
+  P(Heart): 0.25
+  P(Hypertension): 0.25
+  P(Diabetes)*P(Heart): 0.15
+  P(Hypertension)*P(Heart): 0.10
+  P(Diabetes)*P(Hypertension): 0.05
+Source:
+def compute_cri(diabetes_risk: float, ckd_risk: float, heart_risk: float, hypertension_risk: float) -> float:
+    """
+    Compute the Comorbidity Risk Index (CRI) for a patient.
+    Formula:
+      CRI = 0.30 * P(Diabetes) + 0.20 * P(CKD) + 0.25 * P(Heart Disease) + 0.25 * P(Hypertension) + Interactions
+      
+    Interactions:
+      - Diabetes + Heart: +0.15 * P(Diabetes) * P(Heart Disease) (diabetics are 2-4x more likely to develop HD)
+      - Hypertension + Heart: +0.10 * P(Hypertension) * P(Heart Disease)
+      - Diabetes + Hypertension: +0.05 * P(Diabetes) * P(Hypertension)
+      
+    The final score is clipped to [0.0, 1.0].
+    """
+    # Base weighted sum
+    base_score = (
+        0.30 * diabetes_risk +
+        0.20 * ckd_risk +
+        0.25 * heart_risk +
+        0.25 * hypertension_risk
+    )
+    
+    # Interaction terms
+    interactions = (
+        0.15 * diabetes_risk * heart_risk +
+        0.10 * hypertension_risk * heart_risk +
+        0.05 * diabetes_risk * hypertension_risk
+    )
+    
+    cri = base_score + interactions
+    return float(np.clip(cri, 0.0, 1.0))
